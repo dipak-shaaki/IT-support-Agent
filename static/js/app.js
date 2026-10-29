@@ -28,14 +28,95 @@ function removeWelcome(){
 }
 function escapeHtml(s=''){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function formatText(s=''){return escapeHtml(s).replace(/\n/g,'<br>');}
+function inlineMarkdown(text){
+  const protectedContent=[];
+  const hold=(value)=>{
+    const placeholder=`\u0000${protectedContent.length}\u0000`;
+    protectedContent.push(value);
+    return placeholder;
+  };
+  let html=escapeHtml(text)
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,(_,label,url)=>hold(`<a href="${url}" target="_blank" rel="noopener">${label}</a>`))
+    .replace(/`([^`\n]+)`/g,(_,value)=>hold(`<code>${value}</code>`));
+  html=html
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/__(.+?)__/g,'<strong>$1</strong>')
+    .replace(/~~(.+?)~~/g,'<del>$1</del>')
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>')
+    .replace(/(^|[^_])_([^_\n]+)_(?!_)/g,'$1<em>$2</em>');
+  return html.replace(/\u0000(\d+)\u0000/g,(_,index)=>protectedContent[Number(index)]);
+}
+function markdownToHtml(text=''){
+  const lines=String(text).replace(/\r\n?/g,'\n').split('\n');
+  const output=[];
+  let paragraph=[];
+  let listType=null;
+  let codeLines=null;
+  const flushParagraph=()=>{
+    if(paragraph.length){
+      output.push(`<p>${paragraph.map(inlineMarkdown).join('<br>')}</p>`);
+      paragraph=[];
+    }
+  };
+  const closeList=()=>{
+    if(listType){output.push(`</${listType}>`);listType=null;}
+  };
+  for(const line of lines){
+    if(codeLines!==null){
+      if(/^\s*```/.test(line)){
+        output.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+        codeLines=null;
+      }else codeLines.push(line);
+      continue;
+    }
+    if(/^\s*```/.test(line)){
+      flushParagraph();closeList();codeLines=[];
+      continue;
+    }
+    if(!line.trim()){
+      flushParagraph();closeList();
+      continue;
+    }
+    const heading=line.match(/^\s*(#{1,6})\s+(.+)$/);
+    if(heading){
+      flushParagraph();closeList();
+      const level=heading[1].length;
+      output.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+    if(/^\s*(?:[-*_]\s*){3,}$/.test(line)){
+      flushParagraph();closeList();output.push('<hr>');
+      continue;
+    }
+    const list=line.match(/^\s*(?:([-*+])|(\d+)[.)])\s+(.+)$/);
+    if(list){
+      flushParagraph();
+      const nextType=list[2]?'ol':'ul';
+      if(listType!==nextType){closeList();listType=nextType;output.push(`<${listType}>`);}
+      output.push(`<li>${inlineMarkdown(list[3])}</li>`);
+      continue;
+    }
+    const quote=line.match(/^\s*>\s?(.*)$/);
+    if(quote){
+      flushParagraph();closeList();
+      output.push(`<blockquote>${inlineMarkdown(quote[1])}</blockquote>`);
+      continue;
+    }
+    closeList();paragraph.push(line);
+  }
+  if(codeLines!==null) output.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+  flushParagraph();closeList();
+  return output.join('');
+}
 function messageHtml(text, source='', citations=[]){
   const citeHtml=citations.length?`<div class="citations"><strong>Sources</strong><br>${citations.map(c=>c.url?`<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener">${escapeHtml(c.title)}</a>`:escapeHtml(c.title)).join('<br>')}</div>`:'';
-  return `${formatText(text)}${source?`<div class="answer-source">Source: ${escapeHtml(source)}</div>`:''}${citeHtml}`;
+  return `${markdownToHtml(text)}${source?`<div class="answer-source">Source: ${escapeHtml(source)}</div>`:''}${citeHtml}`;
 }
 function addMessage(role, text, source='', citations=[]){
   removeWelcome();
   const wrap=document.createElement('div'); wrap.className=`message ${role}`;
-  wrap.innerHTML=`<div class="avatar">AI</div><div class="bubble">${messageHtml(text, source, citations)}</div>`;
+  const body=role==='assistant'?messageHtml(text, source, citations):formatText(text);
+  wrap.innerHTML=`<div class="avatar">AI</div><div class="bubble">${body}</div>`;
   chat.appendChild(wrap); chat.scrollTop=chat.scrollHeight;
 }
 function addStreamingBubble(){
@@ -75,7 +156,7 @@ async function askAgent(q){
         if(evt.type==='trace') appendTrace(evt.text);
         else if(evt.type==='token'){
           streamedAnswer+=evt.text;
-          bubble.innerHTML=formatText(streamedAnswer);
+          bubble.innerHTML=markdownToHtml(streamedAnswer);
           chat.scrollTop=chat.scrollHeight;
         }
         else if(evt.type==='done'){
@@ -143,6 +224,10 @@ const uploadStatus=document.getElementById('uploadStatus');
 const adminKeyInput=document.getElementById('adminKey');
 const savedAdminKey=sessionStorage.getItem(adminKeyStorageKey);
 if(savedAdminKey) adminKeyInput.value=savedAdminKey;
+if(new URLSearchParams(location.search).get('upload')==='1'){
+  document.getElementById('uploadPanel').open=true;
+  history.replaceState(null,'',location.pathname);
+}
 
 uploadForm.addEventListener('submit',async event=>{
   event.preventDefault();

@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#101116" />
+  <meta name="theme-color" content="#f7f8f6" />
   <title>{{ app_name }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/css/style.css" />
-  <link rel="stylesheet" href="/static/css/minimal-ui.css?v=4" />
+  <link rel="stylesheet" href="/static/css/minimal-ui.css?v=6" />
 </head>
 <body class="simple-ui">
   <main class="simple-shell">
@@ -19,8 +19,30 @@
         <span>{{ app_name }}</span>
       </a>
       <nav class="simple-actions" aria-label="Main navigation">
-        <button id="newChat" class="simple-button simple-button-light" type="button">New chat</button>
-        <a class="simple-button simple-button-light" href="/dashboard">Dashboard</a>
+        <button id="newChat" class="simple-button" type="button" aria-label="New chat" title="New chat">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          <span class="button-label">New chat</span>
+        </button>
+        <details id="uploadPanel" class="simple-panel simple-upload-panel">
+          <summary class="simple-button simple-button-primary" aria-label="Add documents" title="Add documents">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            <span class="button-label">Add documents</span>
+          </summary>
+          <form id="uploadForm" class="simple-upload-form">
+            <strong>Add a support document</strong>
+            <p>Index a PDF, text, Markdown, or Word document into the private knowledge base.</p>
+            <label for="adminKey">Admin API key</label>
+            <input id="adminKey" name="adminKey" type="password" autocomplete="current-password" required />
+            <label for="fileInput">Choose a document</label>
+            <input id="fileInput" name="file" type="file" accept=".pdf,.txt,.md,.docx" required />
+            <button id="uploadBtn" class="simple-button simple-button-primary" type="submit">Upload and index</button>
+            <p id="uploadStatus" class="simple-status" role="status" aria-live="polite"></p>
+          </form>
+        </details>
+        <a class="simple-button" href="/dashboard" aria-label="Dashboard" title="Dashboard">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h7V4H4zM15 20h5v-9h-5zM15 4h5v3h-5zM4 20h7v-3H4z" /></svg>
+          <span class="button-label">Dashboard</span>
+        </a>
       </nav>
     </header>
 
@@ -56,19 +78,6 @@
 
     <section class="simple-tools" aria-label="Support tools">
       <details class="simple-panel">
-        <summary>Upload a support document</summary>
-        <p>Index a PDF, text, Markdown, or Word document into the private knowledge base.</p>
-        <form id="uploadForm" class="simple-upload-form">
-          <label for="adminKey">Admin API key</label>
-          <input id="adminKey" name="adminKey" type="password" autocomplete="current-password" required />
-          <label for="fileInput">Document</label>
-          <input id="fileInput" name="file" type="file" accept=".pdf,.txt,.md,.docx" required />
-          <button id="uploadBtn" class="simple-button simple-button-primary" type="submit">Upload and index</button>
-          <p id="uploadStatus" class="simple-status" role="status" aria-live="polite"></p>
-        </form>
-      </details>
-
-      <details class="simple-panel">
         <summary>Agent activity</summary>
         <p id="sourceUsed" class="simple-status">No response yet</p>
         <div id="trace" class="simple-trace"><div class="empty">Activity will appear here.</div></div>
@@ -76,6 +85,6 @@
     </section>
   </main>
 
-  <script src="/static/js/app.js?v=4"></script>
+  <script src="/static/js/app.js?v=5"></script>
 </body>
 </html>
