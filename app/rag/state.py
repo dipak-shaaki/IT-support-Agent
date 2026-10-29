@@ -12,6 +12,8 @@ class AgentState(TypedDict):
     answer: str
     source_used: str
     tool_call_count: int
+    stream_tokens: bool
+    require_web_search: bool
     private_kb_searched: bool
     web_searched: bool
     trace: list[str]

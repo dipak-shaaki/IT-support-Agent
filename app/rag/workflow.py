@@ -1,5 +1,7 @@
 import json
 import logging
+import re
+from uuid import uuid4
 from typing import Literal
 
 from langchain_core.messages import (
@@ -12,6 +14,7 @@ from langchain_core.messages import (
 from langchain_core.tools import tool
 from langchain_groq import ChatGroq
 from langchain_tavily import TavilySearch
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
@@ -23,6 +26,11 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 MAX_TOOL_CALLS = 6
+CURRENT_STATUS_PATTERN = re.compile(
+    r"\b(outage|service status|status page|service health|is .+ down|"
+    r"currently unavailable|having issues right now)\b",
+    re.IGNORECASE,
+)
 _llm = None
 _web_search = None
 
@@ -111,7 +119,10 @@ evidence is insufficient, say so and recommend contacting the IT help desk. Neve
 invent policies, sources, or tool results. Never send personal identifiers,
 account-specific details, or internal company data to public web search. If a
 user-specific fact is not available in the private knowledge base, abstain instead
-of searching the public web. Be concise and actionable."""
+of searching the public web. For current vendor outages, service health, or status
+questions, search the private KB first and then always use the web-search tool;
+the KB may contain internal escalation guidance, but it cannot establish live
+service status. Be concise and actionable."""
 
 
 def _content_text(content: object) -> str:
@@ -132,9 +143,19 @@ def call_agent(state: AgentState):
         available_tools.append(search_web)
 
     model = llm().bind_tools(available_tools)
-    response = model.invoke(
-        [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
-    )
+    messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
+    if state["stream_tokens"]:
+        response = None
+        writer = get_stream_writer()
+        for chunk in model.stream(messages):
+            text = _content_text(chunk.content)
+            if text:
+                writer({"type": "token", "text": text})
+            response = chunk if response is None else response + chunk
+        if response is None:
+            raise RuntimeError("The model returned no response chunks")
+    else:
+        response = model.invoke(messages)
     trace = state["trace"]
     if response.tool_calls:
         for call in response.tool_calls:
@@ -145,13 +166,65 @@ def call_agent(state: AgentState):
 
 def route_after_agent(
     state: AgentState,
-) -> Literal["tools", "finalize"]:
+) -> Literal["tools", "mandatory_private_search", "mandatory_web_search", "finalize"]:
     last_message = state["messages"][-1]
     if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
+        if state["require_web_search"] and not state["private_kb_searched"]:
+            return "mandatory_private_search"
+        if state["require_web_search"] and not state["web_searched"]:
+            return "mandatory_web_search"
         return "finalize"
     if state["tool_call_count"] >= MAX_TOOL_CALLS:
+        if state["require_web_search"] and not state["private_kb_searched"]:
+            return "mandatory_private_search"
+        if state["require_web_search"] and not state["web_searched"]:
+            return "mandatory_web_search"
         return "finalize"
     return "tools"
+
+
+def mandatory_private_search(state: AgentState):
+    call = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": search_private_kb.name,
+                "args": {"query": state["question"]},
+                "id": str(uuid4()),
+                "type": "tool_call",
+            }
+        ],
+    )
+    return {
+        "messages": [call],
+        "trace": [
+            *state["trace"],
+            "Current service-status question → private KB lookup required first",
+            f"Tool call → {search_private_kb.name}({state['question']})",
+        ],
+    }
+
+
+def mandatory_web_search(state: AgentState):
+    call = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": search_web.name,
+                "args": {"query": state["question"]},
+                "id": str(uuid4()),
+                "type": "tool_call",
+            }
+        ],
+    )
+    return {
+        "messages": [call],
+        "trace": [
+            *state["trace"],
+            "Current service-status question → web lookup required",
+            f"Tool call → {search_web.name}({state['question']})",
+        ],
+    }
 
 
 def execute_tools(state: AgentState):
@@ -236,18 +309,26 @@ def finalize(state: AgentState):
         # A pending tool call at the limit cannot be executed; ask for a final response
         # using only the completed conversation and tool results.
         completed_messages = messages[:-1] if isinstance(last_message, AIMessage) else messages
-        answer_message = llm().invoke(
-            [
-                SystemMessage(
-                    content=(
-                        f"{SYSTEM_PROMPT}\nThe tool-call limit ({MAX_TOOL_CALLS}) has "
-                        "been reached. Answer using only the completed tool results."
-                    )
-                ),
-                *completed_messages,
-            ]
-        )
-        answer = _content_text(answer_message.content).strip()
+        prompt = [
+            SystemMessage(
+                content=(
+                    f"{SYSTEM_PROMPT}\nThe tool-call limit ({MAX_TOOL_CALLS}) has "
+                    "been reached. Answer using only the completed tool results."
+                )
+            ),
+            *completed_messages,
+        ]
+        if state["stream_tokens"]:
+            answer = ""
+            writer = get_stream_writer()
+            for chunk in llm().stream(prompt):
+                text = _content_text(chunk.content)
+                if text:
+                    writer({"type": "token", "text": text})
+                    answer += text
+        else:
+            answer_message = llm().invoke(prompt)
+            answer = _content_text(answer_message.content).strip()
         trace.append("Tool-call limit reached → finalized from completed results")
 
     if not answer:
@@ -273,14 +354,23 @@ def finalize(state: AgentState):
 def build_graph():
     graph = StateGraph(AgentState)
     graph.add_node("agent", call_agent)
+    graph.add_node("mandatory_private_search", mandatory_private_search)
+    graph.add_node("mandatory_web_search", mandatory_web_search)
     graph.add_node("tools", execute_tools)
     graph.add_node("finalize", finalize)
     graph.add_edge(START, "agent")
     graph.add_conditional_edges(
         "agent",
         route_after_agent,
-        {"tools": "tools", "finalize": "finalize"},
+        {
+            "tools": "tools",
+            "mandatory_private_search": "mandatory_private_search",
+            "mandatory_web_search": "mandatory_web_search",
+            "finalize": "finalize",
+        },
     )
+    graph.add_edge("mandatory_private_search", "tools")
+    graph.add_edge("mandatory_web_search", "tools")
     graph.add_edge("tools", "agent")
     graph.add_edge("finalize", END)
     return graph.compile()
@@ -292,6 +382,7 @@ agent_graph = build_graph()
 def initial_state(
     question: str,
     history: list[AnyMessage] | None = None,
+    stream_tokens: bool = False,
 ) -> AgentState:
     return {
         "messages": [*(history or []), HumanMessage(content=question)],
@@ -300,6 +391,8 @@ def initial_state(
         "answer": "",
         "source_used": "",
         "tool_call_count": 0,
+        "stream_tokens": stream_tokens,
+        "require_web_search": bool(CURRENT_STATUS_PATTERN.search(question)),
         "private_kb_searched": False,
         "web_searched": False,
         "trace": [],

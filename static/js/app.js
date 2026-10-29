@@ -1,13 +1,31 @@
 const chat = document.getElementById('chat');
+const welcomeTemplate = document.getElementById('welcomeTemplate');
 const form = document.getElementById('chatForm');
 const question = document.getElementById('question');
 const trace = document.getElementById('trace');
 const sourceUsed = document.getElementById('sourceUsed');
 const newChatButton = document.getElementById('newChat');
 const conversationStorageKey = 'enterprise-it-support-conversation-id';
+const adminKeyStorageKey = 'it_copilot_admin_key';
 let conversationId = localStorage.getItem(conversationStorageKey);
 let restorePromise = Promise.resolve();
 
+function showWelcome(){
+  const content=welcomeTemplate.content.cloneNode(true);
+  const welcome=content.querySelector('.simple-welcome');
+  welcome.querySelector('.simple-welcome-composer').append(form,document.querySelector('.simple-hint'));
+  chat.replaceChildren(content);
+  document.querySelector('.simple-shell').classList.add('is-empty');
+}
+function removeWelcome(){
+  const welcome=chat.querySelector('.simple-welcome');
+  if(!welcome) return;
+  const composeArea=document.querySelector('.simple-compose-area');
+  composeArea.prepend(form);
+  composeArea.append(document.querySelector('.simple-hint'));
+  welcome.remove();
+  document.querySelector('.simple-shell').classList.remove('is-empty');
+}
 function escapeHtml(s=''){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function formatText(s=''){return escapeHtml(s).replace(/\n/g,'<br>');}
 function messageHtml(text, source='', citations=[]){
@@ -15,11 +33,13 @@ function messageHtml(text, source='', citations=[]){
   return `${formatText(text)}${source?`<div class="answer-source">Source: ${escapeHtml(source)}</div>`:''}${citeHtml}`;
 }
 function addMessage(role, text, source='', citations=[]){
+  removeWelcome();
   const wrap=document.createElement('div'); wrap.className=`message ${role}`;
   wrap.innerHTML=`<div class="avatar">AI</div><div class="bubble">${messageHtml(text, source, citations)}</div>`;
   chat.appendChild(wrap); chat.scrollTop=chat.scrollHeight;
 }
 function addStreamingBubble(){
+  removeWelcome();
   const wrap=document.createElement('div'); wrap.className='message assistant';
   wrap.innerHTML='<div class="avatar">AI</div><div class="bubble"><span class="thinking">Thinking…</span></div>';
   chat.appendChild(wrap); chat.scrollTop=chat.scrollHeight;
@@ -36,6 +56,7 @@ async function askAgent(q){
   addMessage('user',q); question.value=''; trace.innerHTML='<div class="empty">Connecting…</div>'; sourceUsed.textContent='Running';
   const btn=form.querySelector('button'); btn.disabled=true; newChatButton.disabled=true;
   const bubble=addStreamingBubble();
+  let streamedAnswer='';
   try{
     const body={question:q}; if(conversationId) body.conversation_id=conversationId;
     const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -52,6 +73,11 @@ async function askAgent(q){
         if(!line) continue;
         const evt=JSON.parse(line.slice(5).trim());
         if(evt.type==='trace') appendTrace(evt.text);
+        else if(evt.type==='token'){
+          streamedAnswer+=evt.text;
+          bubble.innerHTML=formatText(streamedAnswer);
+          chat.scrollTop=chat.scrollHeight;
+        }
         else if(evt.type==='done'){
           finished=true;
           conversationId=evt.conversation_id;
@@ -71,14 +97,26 @@ async function askAgent(q){
   }
 }
 form.addEventListener('submit',e=>{e.preventDefault(); const q=question.value.trim(); if(q) askAgent(q);});
-document.querySelectorAll('.example').forEach(b=>b.addEventListener('click',()=>askAgent(b.textContent.trim())));
+question.addEventListener('keydown',event=>{
+  if(event.key==='Enter'&&!event.shiftKey){
+    event.preventDefault();
+    form.requestSubmit();
+  }
+});
+question.addEventListener('input',()=>{
+  question.style.height='auto';
+  question.style.height=`${Math.min(question.scrollHeight,160)}px`;
+});
+chat.addEventListener('click',event=>{
+  const example=event.target.closest('.example');
+  if(example) askAgent(example.textContent.trim());
+});
 
 newChatButton.addEventListener('click',async()=>{
   await restorePromise;
   conversationId=null;
   localStorage.removeItem(conversationStorageKey);
-  chat.replaceChildren();
-  addMessage('assistant','Hi! How can I help with IT support? Previous conversations stay separate.');
+  showWelcome();
   renderTrace();
   sourceUsed.textContent='Ready';
 });
@@ -96,14 +134,41 @@ async function restoreConversation(){
     sourceUsed.textContent='Memory unavailable';
   }
 }
+showWelcome();
 restorePromise=restoreConversation();
 
-const modal=document.getElementById('uploadModal');
-document.getElementById('openUpload').onclick=()=>modal.classList.remove('hidden');
-document.getElementById('closeUpload').onclick=()=>modal.classList.add('hidden');
-document.getElementById('uploadBtn').onclick=async()=>{
-  const file=document.getElementById('fileInput').files[0]; const key=document.getElementById('adminKey').value; const status=document.getElementById('uploadStatus');
-  if(!file){status.textContent='Choose a file first.'; return;}
-  status.textContent='Indexing document...'; const fd=new FormData(); fd.append('file',file);
-  try{const r=await fetch('/api/ingest',{method:'POST',headers:{'X-Admin-Key':key},body:fd}); const d=await r.json(); if(!r.ok) throw new Error(d.detail||'Upload failed'); status.textContent=`Indexed ${d.file}: ${d.chunks} chunks.`;}catch(e){status.textContent=`Error: ${e.message}`;}
-};
+const uploadForm=document.getElementById('uploadForm');
+const uploadButton=document.getElementById('uploadBtn');
+const uploadStatus=document.getElementById('uploadStatus');
+const adminKeyInput=document.getElementById('adminKey');
+const savedAdminKey=sessionStorage.getItem(adminKeyStorageKey);
+if(savedAdminKey) adminKeyInput.value=savedAdminKey;
+
+uploadForm.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const file=document.getElementById('fileInput').files[0];
+  const key=adminKeyInput.value.trim();
+  if(!file){uploadStatus.textContent='Choose a document to upload.'; return;}
+  if(!key){uploadStatus.textContent='Enter the admin API key.'; return;}
+  const formData=new FormData();
+  formData.append('file',file);
+  uploadButton.disabled=true;
+  uploadStatus.textContent='Uploading and indexing…';
+  sessionStorage.setItem(adminKeyStorageKey,key);
+  try{
+    const response=await fetch('/api/ingest',{
+      method:'POST',
+      headers:{'X-Admin-Key':key},
+      body:formData
+    });
+    const data=await response.json();
+    if(!response.ok) throw new Error(data.detail||`Upload failed (${response.status})`);
+    uploadStatus.textContent=`Indexed ${data.file}: ${data.chunks} chunks added.`;
+    uploadForm.reset();
+    adminKeyInput.value=key;
+  }catch(error){
+    uploadStatus.textContent=`Error: ${error.message}`;
+  }finally{
+    uploadButton.disabled=false;
+  }
+});

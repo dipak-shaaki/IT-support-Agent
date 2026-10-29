@@ -114,15 +114,22 @@ def chat_stream(payload: ChatRequest):
     conversation_id = payload.conversation_id or uuid4()
 
     def events():
-        state = initial_state(payload.question)
+        state = initial_state(payload.question, stream_tokens=True)
         history: list[BaseMessage] = []
         emitted = 0
         audited = False
         try:
             history = load_conversation(conversation_id)
-            state = initial_state(payload.question, history)
-            for update in agent_graph.stream(state, stream_mode="updates"):
-                for node, delta in update.items():
+            state = initial_state(payload.question, history, stream_tokens=True)
+            for mode, chunk in agent_graph.stream(
+                state,
+                stream_mode=["updates", "custom"],
+            ):
+                if mode == "custom":
+                    if chunk.get("type") == "token":
+                        yield _sse({"type": "token", "text": chunk["text"]})
+                    continue
+                for node, delta in chunk.items():
                     state.update(delta)
                     trace_lines = state.get("trace", [])
                     for line in trace_lines[emitted:]:

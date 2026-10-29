@@ -3,89 +3,79 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#101116" />
   <title>{{ app_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="/static/css/minimal-ui.css?v=4" />
 </head>
-<body>
-  <div class="shell">
-    <aside class="sidebar">
-      <div>
-        <div class="brand-badge">IT Support Agent</div>
-        <h1>IT Support Agent</h1>
-        <p class="muted">Private company knowledge first. External web only when evidence is weak.</p>
+<body class="simple-ui">
+  <main class="simple-shell">
+    <header class="simple-header">
+      <a class="simple-brand" href="/" aria-label="IT Support Agent home">
+        <span class="simple-brand-mark" aria-hidden="true">IT</span>
+        <span>{{ app_name }}</span>
+      </a>
+      <nav class="simple-actions" aria-label="Main navigation">
+        <button id="newChat" class="simple-button simple-button-light" type="button">New chat</button>
+        <a class="simple-button simple-button-light" href="/dashboard">Dashboard</a>
+      </nav>
+    </header>
+
+    <template id="welcomeTemplate">
+      <div class="simple-welcome">
+        <div class="simple-welcome-copy">
+          <p class="simple-eyebrow">IT SUPPORT</p>
+          <h1>What can I help you with?</h1>
+          <p>Get clear answers for your work accounts, devices, and tools.</p>
+        </div>
+        <div class="simple-welcome-composer"></div>
+        <div class="simple-examples" aria-label="Suggested questions">
+          <button class="simple-chip example" type="button"><span aria-hidden="true">⌁</span> I can’t connect to the company VPN</button>
+          <button class="simple-chip example" type="button"><span aria-hidden="true">↻</span> Help me reset my password</button>
+          <button class="simple-chip example" type="button"><span aria-hidden="true">◉</span> My MFA code isn’t working</button>
+          <button class="simple-chip example" type="button"><span aria-hidden="true">⌕</span> Is Microsoft Teams having an outage?</button>
+        </div>
       </div>
+    </template>
 
-      <div class="workflow-card">
-        <h3>Tool-calling workflow</h3>
-        <div class="flow-step">1. Model reads the conversation</div>
-        <div class="flow-step">2. Model selects a tool</div>
-        <div class="flow-step">3. Search private knowledge first</div>
-        <div class="flow-step">4. Search the web when needed</div>
-        <div class="flow-step">5. Return tool results to the model</div>
-        <div class="flow-step">6. Respond with sources</div>
-      </div>
+    <section id="chat" class="simple-chat" aria-live="polite" aria-label="Conversation"></section>
 
-      <button id="openUpload" class="secondary-btn">+ Add Company Document</button>
-    </aside>
+    <section class="simple-compose-area" aria-label="Ask the IT Support Agent">
+      <form id="chatForm" class="simple-composer">
+        <label class="sr-only" for="question">Your IT support question</label>
+        <textarea id="question" rows="1" maxlength="3000" placeholder="Ask anything about IT…" required></textarea>
+        <button id="sendButton" type="submit" class="simple-send" aria-label="Send message" title="Send message">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>
+        </button>
+      </form>
+      <p class="simple-hint">IT Support Agent can make mistakes. Verify critical instructions with your support team.</p>
+    </section>
 
-    <main class="main">
-      <header class="topbar">
-        <div>
-          <span class="status-dot"></span>
-          <span>IT Support Agent</span>
-        </div>
-        <div class="dash-actions">
-          <button class="pill" id="newChat" type="button">New chat</button>
-          <a class="pill" href="/dashboard">Dashboard</a>
-          <span class="pill">Agentic RAG</span>
-        </div>
-      </header>
-
-      <section id="chat" class="chat-area">
-        <div class="message assistant">
-          <div class="avatar">AI</div>
-          <div class="bubble">
-            <strong>How can I help with IT support?</strong>
-            <p>Try: “How do I connect to the company VPN?” or ask a question that may require current external vendor information.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="composer-wrap">
-        <div class="examples">
-          <button class="example">How do I connect to the company VPN?</button>
-          <button class="example">What is our password reset policy?</button>
-          <button class="example">What is the latest Microsoft Teams outage guidance?</button>
-        </div>
-        <form id="chatForm" class="composer">
-          <textarea id="question" rows="2" placeholder="Ask an IT support question..." required></textarea>
-          <button type="submit" class="send-btn">Ask Agent</button>
+    <section class="simple-tools" aria-label="Support tools">
+      <details class="simple-panel">
+        <summary>Upload a support document</summary>
+        <p>Index a PDF, text, Markdown, or Word document into the private knowledge base.</p>
+        <form id="uploadForm" class="simple-upload-form">
+          <label for="adminKey">Admin API key</label>
+          <input id="adminKey" name="adminKey" type="password" autocomplete="current-password" required />
+          <label for="fileInput">Document</label>
+          <input id="fileInput" name="file" type="file" accept=".pdf,.txt,.md,.docx" required />
+          <button id="uploadBtn" class="simple-button simple-button-primary" type="submit">Upload and index</button>
+          <p id="uploadStatus" class="simple-status" role="status" aria-live="polite"></p>
         </form>
-      </section>
-    </main>
+      </details>
 
-    <aside class="trace-panel">
-      <h2>Agent Trace</h2>
-      <p class="muted">Watch LangGraph decisions while the request runs.</p>
-      <div id="trace" class="trace-list"><div class="empty">No request yet.</div></div>
-      <div class="source-box">
-        <span>Final Source</span>
-        <strong id="sourceUsed">—</strong>
-      </div>
-    </aside>
-  </div>
+      <details class="simple-panel">
+        <summary>Agent activity</summary>
+        <p id="sourceUsed" class="simple-status">No response yet</p>
+        <div id="trace" class="simple-trace"><div class="empty">Activity will appear here.</div></div>
+      </details>
+    </section>
+  </main>
 
-  <div id="uploadModal" class="modal hidden">
-    <div class="modal-card">
-      <div class="modal-head"><h2>Ingest Company Document</h2><button id="closeUpload">×</button></div>
-      <p class="muted">Upload PDF, TXT, Markdown, or DOCX. The document is chunked, embedded, and indexed into Pinecone.</p>
-      <input id="adminKey" type="password" placeholder="Admin API key" />
-      <input id="fileInput" type="file" accept=".pdf,.txt,.md,.docx" />
-      <button id="uploadBtn" class="send-btn full">Index Document</button>
-      <div id="uploadStatus" class="upload-status"></div>
-    </div>
-  </div>
-
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=4"></script>
 </body>
 </html>

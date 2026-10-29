@@ -9,7 +9,7 @@ An internal IT-support assistant that answers from a private company knowledge b
 - Private knowledge retrieval using Pinecone and local Hugging Face embeddings.
 - Private-KB-first tool availability and a bounded model/tool loop.
 - Tavily web search fallback for questions the private knowledge base cannot answer.
-- FastAPI endpoints for chat, streaming chat, document ingestion, health, and audit statistics.
+- FastAPI endpoints for chat, token-streaming chat, document ingestion, health, and audit statistics.
 - Redis-backed conversation memory with configurable expiration and a browser "New chat" control.
 - Browser-based chat and operational dashboard.
 - SQLite audit history for answer source, traces, and unanswered knowledge-base gaps.
@@ -34,6 +34,8 @@ Question → Groq agent → tool call? ── no ──→ Direct response
 ```
 
 The model requests tools using native tool calls; it does not merely receive a prompt asking it to imitate a call. A LangGraph `ToolNode` executes each requested function and returns its result to the model. The graph exposes only the private-KB tool initially; Tavily becomes available after a private search has run. The assistant can then decide whether the private results suffice or whether it should call web search. Tool calls, result counts, and sources are recorded in the response trace.
+
+Questions about live service status or outages are checked against the private KB first, then automatically sent to web search so internal runbooks and current vendor status can both inform the response.
 
 ## Technology
 
@@ -145,6 +147,8 @@ curl -X POST http://127.0.0.1:8080/api/chat \
 To index a document, send a supported file to `/api/ingest` with the `x-admin-key` header set to `ADMIN_API_KEY`. The statistics endpoint uses the same header.
 
 Chat requests may include a `conversation_id` UUID. If omitted, the API creates one and returns it in the response (or the stream's `done` event). Reuse that ID on subsequent requests to continue the conversation. The web UI stores the ID in browser local storage and restores the transcript; use **New chat** to start a separate conversation. The server retains up to 20 messages (10 exchanges) and expires inactive conversations after 24 hours by default.
+
+The streaming endpoint sends `token` events as the model generates its final answer, `trace` events as agent/tool steps complete, and a final `done` event with the complete answer and citations. Failures are sent as `error` events.
 
 ## Configuration
 

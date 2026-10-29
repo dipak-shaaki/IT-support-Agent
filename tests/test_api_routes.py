@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from uuid import UUID
 
 from app.api import routes
+from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage
 
 
@@ -133,16 +134,22 @@ def test_stream_returns_conversation_id_and_saves_turn(monkeypatch):
 
     class FakeGraph:
         def stream(self, state, stream_mode):
-            assert stream_mode == "updates"
+            assert stream_mode == ["updates", "custom"]
             assert state["messages"] == [HumanMessage(content="Hello there")]
-            yield {
-                "finalize": {
-                    "answer": "Hello! How can I help?",
-                    "source_used": "direct",
-                    "trace": ["Direct response → no retrieval"],
-                    "citations": [],
+            assert state["stream_tokens"] is True
+            yield "custom", {"type": "token", "text": "Hello! "}
+            yield "custom", {"type": "token", "text": "How can I help?"}
+            yield (
+                "updates",
+                {
+                    "finalize": {
+                        "answer": "Hello! How can I help?",
+                        "source_used": "direct",
+                        "trace": ["Direct response → no retrieval"],
+                        "citations": [],
+                    }
                 }
-            }
+            )
 
     monkeypatch.setattr(routes, "load_conversation", lambda requested_id: [])
     monkeypatch.setattr(routes, "save_conversation", lambda key, messages: saved.append((key, messages)))
@@ -155,6 +162,8 @@ def test_stream_returns_conversation_id_and_saves_turn(monkeypatch):
     )
 
     assert response.status_code == 200
+    assert '"type": "token", "text": "Hello! "' in response.text
+    assert '"type": "token", "text": "How can I help?"' in response.text
     assert f'"conversation_id": "{conversation_id}"' in response.text
     assert '"type": "done"' in response.text
     assert saved == [
@@ -194,3 +203,67 @@ def test_stats_returns_audit_summaries_with_admin_key(monkeypatch):
         "gaps": [],
         "recent": [],
     }
+
+
+def test_ingest_requires_admin_key(monkeypatch):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+
+    response = create_client().post(
+        "/api/ingest",
+        files={"file": ("vpn.md", b"VPN steps", "text/markdown")},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid admin key"}
+
+
+def test_ingest_rejects_unsupported_file_type(monkeypatch):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+
+    response = create_client().post(
+        "/api/ingest",
+        headers={"x-admin-key": "test-secret"},
+        files={"file": ("policy.csv", b"policy", "text/csv")},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Supported: .docx, .md, .pdf, .txt"}
+
+
+def test_ingest_saves_parses_chunks_and_indexes_document(monkeypatch, tmp_path):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
+    parsed_files = []
+    indexed_chunks = []
+
+    def fake_load_file(path: Path):
+        parsed_files.append((path.name, path.read_bytes()))
+        return ["parsed document"]
+
+    monkeypatch.setattr(routes, "load_file", fake_load_file)
+    monkeypatch.setattr(
+        routes,
+        "chunk_documents",
+        lambda documents: [f"{documents[0]} chunk"],
+    )
+    monkeypatch.setattr(
+        routes,
+        "add_documents",
+        lambda chunks: indexed_chunks.extend(chunks) or ["vector-1"],
+    )
+
+    response = create_client().post(
+        "/api/ingest",
+        headers={"x-admin-key": "test-secret"},
+        files={"file": ("vpn.md", b"VPN connection instructions", "text/markdown")},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "message": "Document indexed",
+        "file": "vpn.md",
+        "chunks": 1,
+        "ids_created": 1,
+    }
+    assert parsed_files == [("vpn.md", b"VPN connection instructions")]
+    assert indexed_chunks == ["parsed document chunk"]

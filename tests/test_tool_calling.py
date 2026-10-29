@@ -2,7 +2,7 @@ import json
 
 import pytest
 from langchain_core.documents import Document
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
 from app.rag import workflow
 
@@ -26,6 +26,10 @@ class FakeBoundModel:
     def invoke(self, messages):
         self.model.available_tools.append({tool.name for tool in self.tools})
         return self.model.responses.pop(0)
+
+    def stream(self, messages):
+        self.model.available_tools.append({tool.name for tool in self.tools})
+        yield from self.model.responses
 
 
 class FakeModel:
@@ -106,6 +110,60 @@ def test_agent_calls_private_tool_before_it_can_call_web(monkeypatch):
     assert any("search_web" in line for line in result["trace"])
 
 
+def test_current_outage_question_forces_private_then_web_search(monkeypatch):
+    model = FakeModel(
+        [
+            AIMessage(content="I don't have current status."),
+            AIMessage(content="The private KB has no outage notice."),
+            AIMessage(content="Check the vendor's live status page."),
+        ]
+    )
+    web_requests = []
+    monkeypatch.setattr(workflow, "llm", lambda: model)
+    monkeypatch.setattr(
+        workflow,
+        "get_retriever",
+        lambda: type("Retriever", (), {"invoke": lambda self, query: []})(),
+    )
+    monkeypatch.setattr(
+        workflow,
+        "web_search_provider",
+        lambda: type(
+            "WebSearch",
+            (),
+            {
+                "invoke": lambda self, request: (
+                    web_requests.append(request)
+                    or {
+                        "answer": "Check the Microsoft 365 status page.",
+                        "results": [
+                            {
+                                "title": "Service health",
+                                "url": "https://status.example.test",
+                                "content": "Status page content",
+                            }
+                        ],
+                    }
+                )
+            },
+        )(),
+    )
+
+    result = workflow.ask("What is the latest Microsoft Teams outage guidance?")
+    called_tools = [
+        line.split("Tool call → ", 1)[1].split("(", 1)[0]
+        for line in result["trace"]
+        if line.startswith("Tool call → ")
+    ]
+
+    assert called_tools == ["search_private_kb", "search_web"]
+    assert web_requests == [
+        {"query": "What is the latest Microsoft Teams outage guidance?"}
+    ]
+    assert result["source_used"] == "web_search"
+    assert result["citations"][0]["type"] == "web"
+
+
 def test_private_search_tool_returns_documents_as_json(monkeypatch):
     monkeypatch.setattr(workflow, "get_retriever", lambda: FakeRetriever())
 
@@ -131,6 +189,37 @@ def test_model_can_reply_without_calling_tools(monkeypatch):
     assert result["source_used"] == "direct"
     assert result["citations"] == []
     assert result["trace"] == ["Direct response → no retrieval"]
+
+
+def test_streaming_graph_emits_answer_tokens_as_custom_events(monkeypatch):
+    model = FakeModel(
+        [
+            AIMessageChunk(content="Hello! "),
+            AIMessageChunk(content="How can I help?"),
+        ]
+    )
+    monkeypatch.setattr(workflow, "llm", lambda: model)
+
+    events = list(
+        workflow.agent_graph.stream(
+            workflow.initial_state("Hello", stream_tokens=True),
+            stream_mode=["updates", "custom"],
+        )
+    )
+
+    tokens = [
+        chunk["text"]
+        for mode, chunk in events
+        if mode == "custom" and chunk.get("type") == "token"
+    ]
+    final_update = next(
+        chunk["finalize"]
+        for mode, chunk in events
+        if mode == "updates" and "finalize" in chunk
+    )
+
+    assert tokens == ["Hello! ", "How can I help?"]
+    assert "".join(tokens) == final_update["answer"]
 
 
 def test_initial_state_includes_prior_conversation_turns():
