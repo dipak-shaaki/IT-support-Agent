@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="dash-shell">
+    <header class="topbar">
+      <div>
+        <span class="status-dot"></span>
+        <span>IT Support Copilot · Operations Dashboard</span>
+      </div>
+      <div class="dash-actions">
+        <a class="pill" href="/">← Back to chat</a>
+      </div>
+    </header>
+
+    <main class="dash-main">
+      <form id="keyForm" class="key-form">
+        <input id="adminKey" type="password" placeholder="Admin API key" autocomplete="current-password" />
+        <button class="send-btn" type="submit">Load stats</button>
+        <span id="status" class="muted"></span>
+      </form>
+
+      <section id="kpis" class="kpi-grid"></section>
+
+      <section class="dash-grid">
+        <div class="panel">
+          <h2>Answers by source</h2>
+          <p class="muted">Where the agent actually got its answer.</p>
+          <div id="sources" class="bar-list"><div class="empty">No data yet.</div></div>
+        </div>
+        <div class="panel">
+          <h2>Questions per day</h2>
+          <p class="muted">Last 14 days of activity.</p>
+          <div id="daily" class="bar-list"><div class="empty">No data yet.</div></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>KB gap report</h2>
+        <p class="muted">Questions the private knowledge base could not answer. These are documentation candidates.</p>
+        <table class="dash-table">
+          <thead><tr><th>Question</th><th>Asks</th><th>Last seen</th></tr></thead>
+          <tbody id="gaps"><tr><td colspan="3" class="empty">No gaps recorded.</td></tr></tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>Recent questions</h2>
+        <table class="dash-table">
+          <thead><tr><th>When</th><th>Question</th><th>Source</th></tr></thead>
+          <tbody id="recent"><tr><td colspan="3" class="empty">No data yet.</td></tr></tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
