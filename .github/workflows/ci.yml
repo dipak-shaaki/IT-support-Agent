@@ -25,8 +25,8 @@ jobs:
     env:
       APP_ENV: test
       ADMIN_API_KEY: ci-only-not-a-secret
-      AUDIT_DB_PATH: ${{ runner.temp }}/it-support-agent-audit.db
-      UPLOAD_DIR: ${{ runner.temp }}/it-support-agent-uploads
+      AUDIT_DB_PATH: /tmp/it-support-agent-audit.db
+      UPLOAD_DIR: /tmp/it-support-agent-uploads
 
     steps:
       - name: Check out repository

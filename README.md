@@ -115,16 +115,6 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 
 Open [http://127.0.0.1:8080](http://127.0.0.1:8080) for chat or [http://127.0.0.1:8080/dashboard](http://127.0.0.1:8080/dashboard) for the audit dashboard. FastAPI's interactive API documentation is at [http://127.0.0.1:8080/docs](http://127.0.0.1:8080/docs).
 
-## Index the sample knowledge base
-
-After configuring Pinecone and the embedding model, index the Markdown documents in `data/sample_kb/`:
-
-```bash
-uv run python ingest_sample_kb.py
-```
-
-The application creates or connects to the configured Pinecone index. Keep `PINECONE_INDEX_NAME` consistent with the index containing your documents; changing the index configuration can make existing indexed content unavailable to the app.
-
 ## API overview
 
 | Method | Path | Purpose |
