@@ -1,6 +1,6 @@
 # IT Support Agent
 
-An internal IT-support assistant that answers from a private company knowledge base first, checks whether the retrieved evidence is sufficient, and uses web search only when the private evidence is weak. The application includes a streaming chat UI, document ingestion, and an audit dashboard.
+An internal IT-support assistant that answers from a private company knowledge base first and uses public web search only when it is needed. The application includes a streaming chat UI, document ingestion, and an audit dashboard.
 
 ## Features
 
@@ -8,7 +8,7 @@ An internal IT-support assistant that answers from a private company knowledge b
 - A ReAct-style agent loop where the Groq model requests tools and LangGraph's `ToolNode` executes them.
 - Private knowledge retrieval using Pinecone and local Hugging Face embeddings.
 - Private-KB-first tool availability and a bounded model/tool loop.
-- Tavily web search fallback for questions the private knowledge base cannot answer.
+- Tavily web search for current service status and relevant public vendor information when private guidance is insufficient.
 - FastAPI endpoints for chat, token-streaming chat, document ingestion, health, and audit statistics.
 - Redis-backed conversation memory with configurable expiration and a browser "New chat" control.
 - Browser-based chat and operational dashboard.
@@ -33,9 +33,9 @@ Question → Groq agent → tool call? ── no ──→ Direct response
         Grounded final response
 ```
 
-The model requests tools using native tool calls; it does not merely receive a prompt asking it to imitate a call. A LangGraph `ToolNode` executes each requested function and returns its result to the model. The graph exposes only the private-KB tool initially; Tavily becomes available after a private search has run. The assistant can then decide whether the private results suffice or whether it should call web search. Tool calls, result counts, and sources are recorded in the response trace.
+The model requests tools using native tool calls; it does not merely receive a prompt asking it to imitate a call. A LangGraph `ToolNode` executes each requested function and returns its result to the model. The graph exposes only the private-KB tool initially; Tavily becomes available after a private search has run. For ordinary IT questions, the assistant uses web search only if the private results do not sufficiently answer the question.
 
-Questions about live service status or outages are checked against the private KB first, then automatically sent to web search so internal runbooks and current vendor status can both inform the response.
+Questions about live service status or outages are checked against the private KB first, then automatically sent to web search because internal runbooks cannot establish current vendor status. If a user explicitly asks about a named organization's public IT, employee, or workplace policy, the assistant also checks the private KB first and, if needed, searches for that organization's policy on its official website. It does not substitute another organization's policy or present public information as the user's employer's policy. A company mention alone does not trigger a web search, and employee-specific or confidential information is never sent to public search.
 
 ## Technology
 
@@ -176,6 +176,10 @@ uv run --locked --group dev pytest
 ```
 
 The tests cover API validation and responses, conversation-memory persistence and follow-ups, admin-key protection, document loading and chunking, tool calling, evaluation scoring, and audit statistics. They use local test data and mocks; they do not require live Redis, LLM, search, or vector-database calls.
+
+## Continuous integration
+
+GitHub Actions runs the test suite on pushes to `main`, pull requests targeting `main`, and manual workflow dispatch. CI checks the committed `uv.lock`, installs the locked development dependencies, and runs tests on Python 3.11 and 3.14. It uses temporary audit and upload paths and does not require production API credentials or deploy the application.
 
 ## Agent evaluations
 

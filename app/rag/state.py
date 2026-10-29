@@ -14,6 +14,7 @@ class AgentState(TypedDict):
     tool_call_count: int
     stream_tokens: bool
     require_web_search: bool
+    external_policy_search_query: str
     private_kb_searched: bool
     web_searched: bool
     trace: list[str]
