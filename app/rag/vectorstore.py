@@ -1,14 +1,22 @@
+import logging
 import time
+from uuid import uuid4
+
+from langchain_core.documents import Document
 from pinecone import Pinecone , ServerlessSpec
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
-from app.core.config import get_settings
 
+from app.core.config import get_settings
+from app.rag.hybrid import Bm25Index, HybridRetriever
+
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
 _embeddings = None
 _vectorstore = None
+_bm25_index = None
 
 
 EMBEDDING_DIMENSIONS = {
@@ -104,11 +112,85 @@ def get_vectorstore():
 
 
 
+def get_bm25_index():
+    global _bm25_index
+    if _bm25_index is None:
+        # shortcut: one in-process cache; multi-worker deployments need a reload or shared index
+        _bm25_index = Bm25Index(settings.bm25_index_path)
+        if len(_bm25_index) == 0:
+            logger.warning(
+                "BM25 index %s is empty; retrieval is vector-only until documents are ingested",
+                settings.bm25_index_path,
+            )
+    return _bm25_index
+
+
+
+
 def get_retriever():
-    return get_vectorstore().as_retriever(search_kwargs={"k": settings.top_k})
+    return HybridRetriever(
+        get_vectorstore().as_retriever(search_kwargs={"k": max(settings.top_k * 2, 10)}),
+        get_bm25_index(),
+        settings.top_k,
+    )
 
 
 
 def add_documents(chunks):
+    ids = get_vectorstore().add_documents(chunks)
+    try:
+        get_bm25_index().add(chunks)
+    except Exception:
+        logger.warning("Failed to update BM25 corpus; keyword retrieval is stale", exc_info=True)
+    return ids
+
+
+def replace_documents(chunks: list[Document]) -> list[str]:
+    sources = {str(chunk.metadata.get("source", "")) for chunk in chunks}
+    if not chunks or len(sources) != 1 or not next(iter(sources)):
+        raise ValueError("Replacement chunks must share one non-empty source")
+
+    source = next(iter(sources))
+    ingestion_id = uuid4().hex
+    versioned_chunks = [
+        Document(
+            page_content=chunk.page_content,
+            metadata={**chunk.metadata, "ingestion_id": ingestion_id},
+        )
+        for chunk in chunks
+    ]
+
     store = get_vectorstore()
-    return store.add_documents(chunks)
+    ids = store.add_documents(versioned_chunks)
+    try:
+        store.delete(
+            filter={
+                "$and": [
+                    {"source": {"$eq": source}},
+                    {
+                        "$or": [
+                            {"ingestion_id": {"$exists": False}},
+                            {"ingestion_id": {"$ne": ingestion_id}},
+                        ]
+                    },
+                ]
+            }
+        )
+    except Exception:
+        logger.exception("Failed to remove previous vectors for %s", source)
+        if ids:
+            try:
+                store.delete(ids=ids)
+            except Exception:
+                logger.exception("Failed to roll back new vectors for %s", source)
+        raise
+
+    try:
+        get_bm25_index().replace_source(versioned_chunks)
+    except Exception:
+        logger.warning(
+            "Failed to replace BM25 source %s; keyword retrieval is stale",
+            source,
+            exc_info=True,
+        )
+    return ids

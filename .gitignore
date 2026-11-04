@@ -2,9 +2,11 @@
 __pycache__/
 *.py[codz]
 *$py.class
+.pytest_cache/
 
 # C extensions
 *.so
+.vscode/
 
 # Distribution / packaging
 .Python
@@ -216,3 +218,24 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated BM25 corpus (rebuilt by ingestion)
+data/bm25_corpus.jsonl
+data/bm25_corpus.jsonl.tmp
+
+# Environment backup
+.env.save
+
+# Project documentation
+IMPROVEMENT_PLAN.md
+
+# Evaluation reports
+.evals/reports/
+
+# Dependency backups
+pyproject.toml.before-cpu-torch
+uv.lock.before-cpu-torch
+uv.lock.bak
+
+
+

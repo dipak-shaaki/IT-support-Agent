@@ -10,16 +10,21 @@ class Settings(BaseSettings):
     app_env: str = "development"
     groq_api_key: str = ""
     tavily_api_key: str = ""
+    gemini_api_key: str = ""
+    openai_api_key: str = ""
     pinecone_api_key: str = ""
     pinecone_index_name: str = "fde-rag-copilot"
     pinecone_namespace: str = "company-it-kb"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     groq_model: str = "openai/gpt-oss-120b"
-    top_k: int = 4
+    gemini_model: str = "gemini-3.8-flash"
+    openai_model: str = "gpt-5.4-mini"
+    top_k: int = 5
     redis_url: str = "redis://localhost:6379/0"
     conversation_ttl_seconds: int = Field(default=86400, gt=0)
     admin_api_key: str = "change-me"
     audit_db_path: str = str(BASE_DIR / "data" / "audit.db")
+    bm25_index_path: str = str(BASE_DIR / "data" / "bm25_corpus.jsonl")
     upload_dir: str = str(BASE_DIR / "uploads")
     sample_kb_dir: str = str(BASE_DIR / "data" / "sample_kb")
 

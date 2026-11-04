@@ -41,6 +41,149 @@ class FakeModel:
         return FakeBoundModel(self, tools)
 
 
+def test_llm_configures_groq_gemini_and_openai_in_fallback_order(monkeypatch):
+    class Provider:
+        def __init__(self, name, **kwargs):
+            self.name = name
+            self.kwargs = kwargs
+
+    monkeypatch.setattr(workflow, "_llm", None)
+    monkeypatch.setattr(workflow.settings, "groq_api_key", "groq-key")
+    monkeypatch.setattr(workflow.settings, "gemini_api_key", "gemini-key")
+    monkeypatch.setattr(workflow.settings, "openai_api_key", "openai-key")
+    monkeypatch.setattr(
+        workflow,
+        "ChatGroq",
+        lambda **kwargs: Provider("groq", **kwargs),
+    )
+    monkeypatch.setattr(
+        workflow,
+        "ChatGoogleGenerativeAI",
+        lambda **kwargs: Provider("gemini", **kwargs),
+    )
+    monkeypatch.setattr(
+        workflow,
+        "ChatOpenAI",
+        lambda **kwargs: Provider("openai", **kwargs),
+    )
+
+    primary = workflow.llm()
+    fallbacks = workflow.fallback_llms()
+
+    assert [primary.name, *(model.name for model in fallbacks)] == [
+        "groq",
+        "gemini",
+        "openai",
+    ]
+    assert fallbacks[0].kwargs["model"] == workflow.settings.gemini_model
+    assert fallbacks[1].kwargs["model"] == workflow.settings.openai_model
+
+
+def test_llm_uses_available_provider_when_groq_key_is_missing(monkeypatch):
+    monkeypatch.setattr(workflow, "_llm", None)
+    monkeypatch.setattr(workflow.settings, "groq_api_key", "")
+    monkeypatch.setattr(workflow.settings, "gemini_api_key", "gemini-key")
+    monkeypatch.setattr(workflow.settings, "openai_api_key", "")
+    monkeypatch.setattr(
+        workflow,
+        "ChatGoogleGenerativeAI",
+        lambda **kwargs: kwargs,
+    )
+
+    assert workflow.llm()["model"] == workflow.settings.gemini_model
+    assert workflow.fallback_llms() == []
+
+
+def test_llm_requires_at_least_one_provider_key(monkeypatch):
+    monkeypatch.setattr(workflow, "_llm", None)
+    monkeypatch.setattr(workflow.settings, "groq_api_key", "")
+    monkeypatch.setattr(workflow.settings, "gemini_api_key", "")
+    monkeypatch.setattr(workflow.settings, "openai_api_key", "")
+
+    with pytest.raises(RuntimeError, match="No chat model API key is configured"):
+        workflow.llm()
+
+
+def test_invoke_uses_next_provider_after_failure(caplog):
+    class FailedProvider:
+        def invoke(self, messages):
+            raise RuntimeError("provider unavailable")
+
+    class AvailableProvider:
+        def invoke(self, messages):
+            return AIMessage(content="Fallback response")
+
+    response = workflow._invoke_with_fallbacks(
+        [FailedProvider(), AvailableProvider()], [HumanMessage(content="Hi")]
+    )
+
+    assert response.content == "Fallback response"
+    assert "trying the next configured provider" in caplog.text
+
+
+def test_invoke_reports_each_provider_failure_when_all_fail():
+    class FailedProvider:
+        def __init__(self, error):
+            self.error = error
+
+        def invoke(self, messages):
+            raise RuntimeError(self.error)
+
+    with pytest.raises(RuntimeError) as error:
+        workflow._invoke_with_fallbacks(
+            [
+                FailedProvider("Groq quota exceeded"),
+                FailedProvider("Gemini unavailable"),
+                FailedProvider("OpenAI has no credits remaining"),
+            ],
+            [HumanMessage(content="Hi")],
+        )
+
+    message = str(error.value)
+    assert "All 3 configured chat model provider(s) failed" in message
+    assert "Groq quota exceeded" in message
+    assert "Gemini unavailable" in message
+    assert "OpenAI has no credits remaining" in message
+
+
+def test_stream_falls_back_only_before_emitting_any_response():
+    class FailedProvider:
+        def stream(self, messages):
+            raise RuntimeError("provider unavailable")
+
+    class AvailableProvider:
+        def stream(self, messages):
+            yield AIMessageChunk(content="Fallback response")
+
+    written = []
+    response = workflow._stream_with_fallbacks(
+        [FailedProvider(), AvailableProvider()],
+        [HumanMessage(content="Hi")],
+        written.append,
+    )
+
+    assert response.content == "Fallback response"
+    assert written == [{"type": "token", "text": "Fallback response"}]
+
+
+def test_stream_does_not_retry_after_partial_output():
+    class PartialFailureProvider:
+        def stream(self, messages):
+            yield AIMessageChunk(content="Partial")
+            raise RuntimeError("provider disconnected")
+
+    class MustNotBeCalledProvider:
+        def stream(self, messages):
+            pytest.fail("A fallback must not duplicate a partial streamed answer")
+
+    with pytest.raises(RuntimeError, match="after output began"):
+        workflow._stream_with_fallbacks(
+            [PartialFailureProvider(), MustNotBeCalledProvider()],
+            [HumanMessage(content="Hi")],
+            lambda token: None,
+        )
+
+
 def test_agent_includes_system_prompt_before_conversation(monkeypatch):
     received_messages = []
 

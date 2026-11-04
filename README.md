@@ -7,6 +7,7 @@ An internal IT-support assistant that answers from a private company knowledge b
 - Model-directed tool calling built with LangChain and LangGraph.
 - A ReAct-style agent loop where the Groq model requests tools and LangGraph's `ToolNode` executes them.
 - Private knowledge retrieval using Pinecone and local Hugging Face embeddings.
+- Hybrid retrieval that fuses Pinecone vector results with a local BM25 index using reciprocal rank fusion (RRF).
 - Private-KB-first tool availability and a bounded model/tool loop.
 - Tavily web search for current service status and relevant public vendor information when private guidance is insufficient.
 - FastAPI endpoints for chat, token-streaming chat, document ingestion, health, and audit statistics.
@@ -44,7 +45,7 @@ Questions about live service status or outages are checked against the private K
 | API and application | FastAPI, Uvicorn |
 | Agent workflow and tool calling | LangGraph `StateGraph` / `ToolNode`, LangChain tools |
 | Language model | Groq |
-| Private retrieval | Pinecone, Hugging Face sentence-transformers |
+| Private retrieval | Pinecone, Hugging Face sentence-transformers, BM25, reciprocal rank fusion |
 | Web search | Tavily |
 | Document ingestion | PyPDF, python-docx, LangChain loaders and text splitters |
 | User interface | HTML, CSS, JavaScript |
@@ -96,7 +97,7 @@ Copy the example configuration and add your API credentials:
 cp .env.example .env
 ```
 
-Set `GROQ_API_KEY`, `TAVILY_API_KEY`, and `PINECONE_API_KEY` in `.env`. Redis must be available at `REDIS_URL` (defaults to `redis://localhost:6379/0`). Set `ADMIN_API_KEY` to a private value before using the dashboard or document-ingestion endpoint. The default value is for local development only.
+Configure at least one of `GROQ_API_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY` in `.env`. When multiple keys are set, the agent tries Groq first, then Gemini, then OpenAI if a provider call fails. `TAVILY_API_KEY` and `PINECONE_API_KEY` are needed for web search and private retrieval. Redis must be available at `REDIS_URL` (defaults to `redis://localhost:6379/0`). Set `ADMIN_API_KEY` to a private value before using the dashboard or document-ingestion endpoint. The default value is for local development only.
 
 Install and start Redis on Ubuntu/Debian:
 
@@ -110,7 +111,7 @@ redis-cli ping
 Redis should respond with `PONG`. Make sure `.env` uses `REDIS_URL=redis://localhost:6379/0`, then run the app:
 
 ```bash
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
+uv run --env-file .env uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 ```
 
 Open [http://127.0.0.1:8080](http://127.0.0.1:8080) for chat or [http://127.0.0.1:8080/dashboard](http://127.0.0.1:8080/dashboard) for the audit dashboard. FastAPI's interactive API documentation is at [http://127.0.0.1:8080/docs](http://127.0.0.1:8080/docs).
@@ -123,7 +124,7 @@ Open [http://127.0.0.1:8080](http://127.0.0.1:8080) for chat or [http://127.0.0.
 | `POST` | `/api/chat` | Ask a question and receive a complete response |
 | `POST` | `/api/chat/stream` | Ask a question and receive server-sent events |
 | `GET` | `/api/conversations/{conversation_id}` | Retrieve a conversation's recent chat transcript |
-| `POST` | `/api/ingest` | Upload and index a PDF, TXT, Markdown, or DOCX file |
+| `POST` | `/api/ingest` | Upload and index or replace a PDF, TXT, Markdown, or DOCX file |
 | `GET` | `/api/stats` | Read audit statistics; requires the `x-admin-key` header |
 
 Example request:
@@ -134,7 +135,13 @@ curl -X POST http://127.0.0.1:8080/api/chat \
   -d '{"question":"How do I connect to the company VPN?"}'
 ```
 
-To index a document, send a supported file to `/api/ingest` with the `x-admin-key` header set to `ADMIN_API_KEY`. The statistics endpoint uses the same header.
+To index a document, send a supported file to `/api/ingest` with the `x-admin-key` header set to `ADMIN_API_KEY`. The file is parsed, chunked, embedded, and stored in Pinecone; the local BM25 corpus is updated too. Uploading a revised file with the same filename replaces its previous indexed chunks. The statistics endpoint uses the same header.
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/ingest \
+  -H 'x-admin-key: YOUR_ADMIN_API_KEY' \
+  -F 'file=@data/sample_kb/service_desk_runbook.md'
+```
 
 Chat requests may include a `conversation_id` UUID. If omitted, the API creates one and returns it in the response (or the stream's `done` event). Reuse that ID on subsequent requests to continue the conversation. The web UI stores the ID in browser local storage and restores the transcript; use **New chat** to start a separate conversation. The server retains up to 20 messages (10 exchanges) and expires inactive conversations after 24 hours by default.
 
@@ -145,17 +152,26 @@ The streaming endpoint sends `token` events as the model generates its final ans
 | Variable | Purpose |
 |---|---|
 | `APP_NAME` | Application name shown in the UI and health response |
-| `GROQ_API_KEY`, `GROQ_MODEL` | Groq credentials and model |
+| `GROQ_API_KEY`, `GROQ_MODEL` | Groq credentials and model; first provider in the fallback order |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Gemini credentials and model; defaults to `gemini-3.8-flash` |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | OpenAI credentials and model; defaults to `gpt-5.4-mini` |
+| `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_AGENT_ID`, `LANGSMITH_AGENT_ENVIRONMENT` | Enable LangSmith tracing and route runs to an agent environment |
 | `TAVILY_API_KEY` | Tavily web-search credentials |
 | `PINECONE_API_KEY` | Pinecone credentials |
 | `PINECONE_INDEX_NAME`, `PINECONE_NAMESPACE` | Private vector index and namespace |
 | `EMBEDDING_MODEL` | Local sentence-transformers embedding model |
-| `TOP_K` | Number of private knowledge-base results to retrieve |
+| `TOP_K` | Number of hybrid private knowledge-base results to return; defaults to 5 |
 | `REDIS_URL` | Redis connection URL for conversation history |
 | `CONVERSATION_TTL_SECONDS` | Inactivity lifetime for a conversation; defaults to 86400 seconds |
 | `ADMIN_API_KEY` | Shared key for the audit statistics and ingestion endpoints |
 
-Additional paths such as `AUDIT_DB_PATH`, `UPLOAD_DIR`, and `SAMPLE_KB_DIR` have defaults in `app/core/config.py`.
+At least one model API key is required. The default models are `openai/gpt-oss-120b` for Groq, `gemini-3.8-flash` for Gemini, and `gpt-5.4-mini` for OpenAI. Fallbacks apply to request failures before a streamed response starts; a stream that fails after sending tokens is not retried to avoid duplicating output.
+
+For an agent-based LangSmith workspace, create the agent and environment first, then set `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`, `LANGSMITH_AGENT_ID`, and `LANGSMITH_AGENT_ENVIRONMENT` in `.env`. Use the agent's identifier (not its display name) and an existing environment such as `development`. Start commands with `uv run --env-file .env ...`. Traces may contain user prompts, retrieved documents, and model answers; enable tracing only with data approved for the configured LangSmith workspace.
+
+Additional paths such as `AUDIT_DB_PATH`, `BM25_INDEX_PATH`, `UPLOAD_DIR`, and `SAMPLE_KB_DIR` have defaults in `app/core/config.py`.
+
+The BM25 corpus is written to `data/bm25_corpus.jsonl` by ingestion. Documents indexed before hybrid retrieval was enabled must be ingested again to appear in keyword results. If the corpus is missing or empty, retrieval logs a warning and falls back to vector-only.
 
 ## Tests
 
@@ -173,15 +189,31 @@ GitHub Actions runs the test suite on pushes to `main`, pull requests targeting 
 
 ## Agent evaluations
 
-The test suite checks implementation behavior; it does not, by itself, measure whether live model responses are useful. `evals/cases.jsonl` is a small labeled evaluation set covering private-KB answers, direct greetings, web fallback, and abstention for unavailable personal information.
+The test suite checks implementation behavior; it does not, by itself, measure whether live model responses are useful. `evals/cases.jsonl` is a labeled live-agent test set covering common internal IT questions, direct greetings, current service status, an external-company policy question, and requests for unavailable personal information. Cases define the expected answer source, tool choices, citations, supporting evidence, and relevant knowledge-base source files.
 
-After setting `.env` and indexing the sample knowledge base, run the live evaluation. Redis is not needed for this command:
+Put representative, reviewed user questions in this file and label which source files should answer each retrieval case. To run the live evaluation, configure Groq, Pinecone, and Tavily credentials and ensure the Pinecone namespace contains the relevant company documents. Documents can be indexed through the UI's **Add documents** action. Redis is not needed for evaluation:
 
 ```bash
-uv run python -m evals.run
+uv run --env-file .env --locked --group dev python -m evals.run
 ```
 
-The runner calls the configured Groq model and Pinecone index (and Tavily for the current-status case). It prints per-case source, tool-order, citation, retrieved-evidence, and answer-term checks plus an aggregate pass rate. It exits with status 1 if any case fails or a provider call errors. Web-search cases depend on live results, so scores can vary; use these checks as a regression signal, not as a claim of human-verified answer quality. Extend the labeled cases with representative questions and reviewed expected behaviors as the knowledge base changes.
+The checked-in benchmark currently has 45 scenarios, including 41 with relevant-source labels. The runner calls the configured Groq model and Pinecone index (and Tavily for current-status and external-policy cases). Save a report and repeat each case to collect latency samples:
+
+```bash
+uv run --env-file .env --locked --group dev python -m evals.run \
+  --repeats 3 \
+  --output evals/reports/run.json
+```
+
+This makes 135 sequential agent requests; use one repeat first to check credentials/indexing. Keep the report with the code/dataset revision and compare runs only when model, prompt, corpus, and retrieval settings are unchanged. The output includes a dataset SHA-256, model/retrieval metadata, per-case results, and aggregate metrics:
+
+- **Source accuracy**: fraction of cases routed to the expected answer source.
+- **Tool-selection accuracy**: fraction of labeled cases whose exact tool sequence matches the expected sequence.
+- **Retrieval precision@5, recall@5, hit-rate@5, and MRR@5**: source-file-level metrics for cases with `expected_relevant_sources` labels. Chunks from a file count as one ranked source. Precision@5 uses a fixed denominator of five; recall@5 counts distinct relevant source files found in the first five unique sources. The report also includes the previous all-retrieved-source precision, recall, and MRR.
+- **Latency p95/p99**: per-question elapsed time around `ask()`, including model and tool calls, but excluding app/UI streaming. Percentiles use the nearest-rank method and include failed calls. Repeats include cold-start effects in the first run; inspect per-case timings and use the same setup when comparing results.
+- **Pass rate**: fraction of cases that meet all their specified checks, including answer terms and citation requirements.
+
+These are checks over a small, hand-labeled set; answer-term checks are not a semantic faithfulness score or a substitute for human review. The current questions were derived from the sample handbook/runbook and should be reviewed against the intended corpus. Live model and web-search behavior can vary. The benchmark does not calculate Ragas faithfulness or answer relevancy. Keep this live evaluation manual; CI runs offline unit tests and does not call external providers.
 
 ## Docker (optional)
 

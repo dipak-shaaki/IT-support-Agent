@@ -248,7 +248,7 @@ def test_ingest_saves_parses_chunks_and_indexes_document(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         routes,
-        "add_documents",
+        "replace_documents",
         lambda chunks: indexed_chunks.extend(chunks) or ["vector-1"],
     )
 
@@ -267,3 +267,26 @@ def test_ingest_saves_parses_chunks_and_indexes_document(monkeypatch, tmp_path):
     }
     assert parsed_files == [("vpn.md", b"VPN connection instructions")]
     assert indexed_chunks == ["parsed document chunk"]
+
+
+def test_ingest_rejects_documents_without_indexable_text(monkeypatch, tmp_path):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
+    monkeypatch.setattr(routes, "load_file", lambda path: [])
+    monkeypatch.setattr(routes, "chunk_documents", lambda documents: [])
+
+    def unexpected_replace(chunks):
+        raise AssertionError("Empty documents must not replace indexed content")
+
+    monkeypatch.setattr(routes, "replace_documents", unexpected_replace)
+
+    response = create_client().post(
+        "/api/ingest",
+        headers={"x-admin-key": "test-secret"},
+        files={"file": ("vpn.md", b"", "text/markdown")},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "The uploaded document contains no indexable text"
+    }

@@ -1,0 +1,1573 @@
+{
+  "passed": 24,
+  "total": 45,
+  "pass_rate": 0.5333333333333333,
+  "run_metadata": {
+    "started_at_utc": "2026-11-04T14:35:19.935110+00:00",
+    "repeats": 1,
+    "cases_per_repeat": 45,
+    "retrieval_top_k": 4,
+    "model": "openai/gpt-oss-120b",
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "latency_percentile_method": "nearest_rank",
+    "dataset_sha256": "be37c1bc2f708c8b6d21cb6619bacfc24b4a0e1c1c312c2000dcb90ff7048732"
+  },
+  "metrics": {
+    "source_accuracy": 0.8222222222222222,
+    "tool_selection_accuracy": 0.7777777777777778,
+    "retrieval_precision": 0.5,
+    "retrieval_recall": 0.8536585365853658,
+    "retrieval_mrr": 0.8414634146341463,
+    "retrieval_precision_at_5": 0.20000000000000004,
+    "retrieval_recall_at_5": 0.8536585365853658,
+    "retrieval_hit_rate_at_5": 0.8536585365853658,
+    "retrieval_mrr_at_5": 0.8414634146341463,
+    "retrieval_cases": 41,
+    "tool_selection_cases": 45,
+    "latency_samples": 45,
+    "latency_mean_seconds": 13.668543160133332,
+    "latency_p95_seconds": 42.238172901001235,
+    "latency_p99_seconds": 73.34576590300094
+  },
+  "cases": [
+    {
+      "name": "vpn_access",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "Sure thing! Here’s the company‑approved way to get onto the VPN:\n\n1. **Install the client**  \n   - Open the internal **Software Portal** and download the **NovaSecure VPN** client.  \n   - Run the installer and follow the prompts.\n\n2. **Launch and sign in**  \n   - Open the NovaSecure app.  \n   - Enter your **company email address** and password.  \n   - You’ll be prompted for **MFA** – approve the request in the company authenticator app (or use your registered hardware security key).\n\n3. **Choose a gateway**  \n   - After authentication, the client will list available corporate gateways.  \n   - Select the one that’s geographically closest to you for the best performance.\n\n4. **Verify the connection**  \n   - Once connected, you should see a “Connected” status and an IP address from the corporate range.  \n   - Test access to an internal resource (e.g., the intranet site) to confirm it’s working.\n\n5. **If it doesn’t connect**  \n   - Make sure you have a working internet connection.  \n   - Restart the NovaSecure client and try a different gateway.  \n   - Do **not** disable your endpoint security or firewall to force a connection.\n\n6. **Need more help?**  \n   - If the VPN still won’t connect, open an IT ticket and attach a screenshot of any error message. The support team will investigate further.\n\nLet me know if any step is unclear or if you run into a specific error!",
+      "repetition": 1,
+      "latency_seconds": 21.665880604999984
+    },
+    {
+      "name": "password_reset",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "The company policy requires passwords to be **at least 14 characters** long.  \n\nFor a regular password change you should use the **self‑service Identity Portal** (the password‑reset page you can access from the intranet). If the self‑service reset doesn’t work or your account is locked, open a ticket with the IT Service Desk for assistance.  \n\nLet me know if you need the portal link or help with the reset steps!",
+      "repetition": 1,
+      "latency_seconds": 1.8540177009999752
+    },
+    {
+      "name": "mfa_policy",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "**Company‑approved MFA methods**\n\n- **Company authenticator app** (the app we provide and manage)  \n- **Registered hardware security keys** (e.g., YubiKey, Feitian, etc.)\n\n*SMS codes are only allowed as a **recovery** option when explicitly enabled; they are not a standard authentication method.*  \n\nThese methods are required for email, VPN, cloud administration, and any other protected company systems. If you need help enrolling a device or resetting your MFA, please follow the self‑service guide in the Identity Portal or open a ticket with the IT Service Desk.",
+      "repetition": 1,
+      "latency_seconds": 2.1034678029991483
+    },
+    {
+      "name": "software_installation",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "**Where to get business software**\n\n1. **Use the company Software Portal** – All approved business applications are distributed there. Install the software directly from the portal to ensure it’s vetted and receives automatic updates.\n\n**If the app you need isn’t in the portal**\n\n1. **Ask your manager for approval** – Your manager must sign off on any new software that isn’t already listed.\n2. **Submit a request to IT** – After you have manager approval, open an IT Service Desk ticket (or use the internal request form) and include:\n   - The name and version of the application  \n   - Why it’s needed for your work  \n   - The manager’s approval (e.g., email or ticket reference)  \n3. **IT security review** – The IT team will evaluate the software for security and compliance. If it passes, they’ll add it to the portal or provide you with a secure installation package.\n\nUntil the request is approved, avoid installing the app from external sites or using admin rights on your device, as this could violate company policy and expose the network to risk. If you need the software urgently, let your manager know so they can expedite the approval process.",
+      "repetition": 1,
+      "latency_seconds": 7.715602147000027
+    },
+    {
+      "name": "lost_laptop",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "If your company laptop is stolen, follow these company‑approved steps:\n\n1. **Contact the IT Service Desk right away** – call or submit a ticket and tell them the laptop is missing.  \n2. **Notify your manager** – let them know what happened and give any details you have.  \n3. **Provide the asset tag (if you have it) and the last known location** – this helps IT and Security locate or lock the device.  \n4. **Do not try to recover the laptop yourself** – IT will handle remote lock/wipe and coordinate with Security.  \n\nAfter you’ve reported it, IT will start the lock‑and‑wipe process and work with Security to address any further actions. If you have any other questions or need help opening a ticket, just let me know.",
+      "repetition": 1,
+      "latency_seconds": 24.523635543999262
+    },
+    {
+      "name": "laptop_performance",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "Here are the first things to look at when a work laptop feels slow. These steps follow our internal **Laptop Performance** run‑book:\n\n1. **Check CPU and memory usage**  \n   - Open Task Manager (Ctrl + Shift + Esc) and look at the **Processes** tab.  \n   - If a single app is using a lot of CPU or RAM, try closing it or restarting the app.\n\n2. **Verify free storage space**  \n   - In **This PC** check the C: drive (or the drive where the OS is installed).  \n   - Aim to keep at least 15 % of the drive free; low space can slow down paging and updates.\n\n3. **Review startup programs**  \n   - In Task Manager go to the **Startup** tab and disable any non‑essential programs that launch on boot.  \n   - Fewer startup items mean a quicker login and less background load.\n\n4. **Confirm Windows updates are applied**  \n   - Open **Settings → Update & Security → Windows Update** and install any pending updates.  \n   - Updates often include performance and security fixes.\n\n5. **Run an endpoint‑security scan**  \n   - Launch the company‑provided security client (e.g., NovaSecure Endpoint) and run a quick full scan.  \n   - Malware or a misbehaving security agent can consume resources.\n\n6. **Restart the laptop**  \n   - A simple reboot clears temporary files and resets services that may have become sluggish.\n\nIf after these checks the laptop is still noticeably slow, it could be a hardware issue (e.g., failing drive or memory) or a deeper software problem. In that case, please open a ticket with the IT Service Desk and include any error messages or screenshots you see.  \n\n*Let me know which step you’d like to try first, or if you run into any specific error while checking these items.*",
+      "repetition": 1,
+      "latency_seconds": 9.467348361000404
+    },
+    {
+      "name": "direct_greeting",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "direct",
+      "tools_called": [],
+      "citation_types": [],
+      "evidence_checked": false,
+      "retrieval": null,
+      "answer": "Hello! How can I help you with your IT needs today?",
+      "repetition": 1,
+      "latency_seconds": 10.654258517999551
+    },
+    {
+      "name": "current_vendor_status",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "web_search",
+      "tools_called": [
+        "search_private_kb",
+        "search_web"
+      ],
+      "citation_types": [
+        "private_kb",
+        "web"
+      ],
+      "evidence_checked": false,
+      "retrieval": null,
+      "answer": "**Current status (external source)**  \nAccording to the public monitoring site [StatusGator – Microsoft Teams](https://statusgator.com/services/microsoft-teams), there are **no active outages** for Microsoft Teams as of November 4 2026. The site lists only past warnings (e.g., September 21 2026) and no “down” notifications for today.\n\n**What you can do next**\n\n1. **Check the official Microsoft 365 Service Health dashboard** – If you have admin access, open the Microsoft 365 admin center → **Health** → **Service health**. This is the authoritative source for any ongoing incidents.  \n2. **Look at the internal IT status page** – Our company may publish a consolidated status page for all SaaS services. If you’re not sure where it is, you can ask the IT Service Desk or check the intranet “IT Status” link.  \n3. **If Teams still isn’t working for you** – Verify basic connectivity (internet, VPN if you’re remote) and try signing out and back into Teams. If the problem is limited to your account, open a ticket with a brief description and any error messages you see.\n\nIf you need help locating the Microsoft 365 admin health page or opening a support ticket, just let me know!",
+      "repetition": 1,
+      "latency_seconds": 42.238172901001235
+    },
+    {
+      "name": "external_company_policy",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "web_search",
+      "tools_called": [
+        "search_private_kb",
+        "search_web"
+      ],
+      "citation_types": [
+        "private_kb",
+        "web"
+      ],
+      "evidence_checked": false,
+      "retrieval": null,
+      "answer": "Apple’s publicly‑available work policy is an external, company‑specific set of guidelines that covers conduct, remote‑work expectations, and employee rights. Key points from Apple’s published materials include:\n\n1. **Business Conduct & Workplace Culture** – Apple requires a safe, inclusive, and respectful environment. Harassment and discrimination are prohibited, and employees must complete mandatory Business Conduct training when hired and annually thereafter. (External source)\n\n2. **Employee Rights** – Workers are free to discuss wages, hours, employment terms, and working conditions. The policy also emphasizes confidentiality, compliance with laws, and a zero‑tolerance stance on insider trading. (External source)\n\n3. **Hybrid Remote‑Work Model (2025)** – Most corporate employees are expected to be in the office three days per week, with flexibility for certain roles that may require more on‑site presence (e.g., hardware engineering). Teams can request variations based on job requirements. (External source)\n\n4. **Compliance & Reporting** – The policy provides channels for reporting concerns (e.g., Business Conduct Helpline) and states that retaliation against good‑faith reports is prohibited. Non‑compliance can lead to disciplinary action up to termination. (External source)\n\n**Note:** This information is gathered from Apple’s publicly posted policies and media reports. For the most accurate and up‑to‑date details, refer directly to Apple’s official employee resources or the Apple compliance website. If you need help with any internal IT matters related to Apple devices or services, let me know!",
+      "repetition": 1,
+      "latency_seconds": 49.76859723999951
+    },
+    {
+      "name": "unknown_personal_device_fact",
+      "passed": false,
+      "checks": {
+        "expected_source": false,
+        "expected_tools": false,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "direct",
+      "tools_called": [],
+      "citation_types": [],
+      "evidence_checked": false,
+      "retrieval": null,
+      "answer": "I’m sorry, but I can’t provide that information. Please check the label on your laptop or contact the IT service desk through the approved support channel for assistance.",
+      "repetition": 1,
+      "latency_seconds": 0.8519736590005778
+    },
+    {
+      "name": "vpn_remote_access",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "Yes. Company policy requires you to connect to the NovaSecure VPN before you can reach any internal systems while you’re working remotely.\n\n**What to do**\n\n1. **Install the VPN client** – Get the NovaSecure VPN client from the internal Software Portal.  \n2. **Sign in** – Use your company email and password, then complete the MFA prompt.  \n3. **Select a gateway** – Choose the corporate gateway that’s closest to your location.  \n4. **Verify the connection** – Once the client shows “Connected,” you can open internal sites, file shares, or intranet apps.\n\nIf the VPN won’t connect, first check your internet connection, restart the client, and try a different gateway. If it still fails, open an IT ticket and attach a screenshot of the error.",
+      "repetition": 1,
+      "latency_seconds": 13.412330143000872
+    },
+    {
+      "name": "vpn_client_location",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "You can download the approved **NovaSecure VPN** client from the company’s internal **Software Portal**.  \n\n1. Open the Software Portal (usually accessed via the intranet or the “Apps” shortcut on your desktop).  \n2. Sign in with your company email and password, then complete the MFA prompt.  \n3. Locate **NovaSecure VPN** in the list of approved applications and click **Install**.  \n4. After installation, launch the client, sign in with your corporate credentials, and select the nearest corporate gateway.\n\nIf you run into any issues (e.g., the client won’t install or can’t connect), let me know and I can walk you through the next troubleshooting steps.",
+      "repetition": 1,
+      "latency_seconds": 23.556453613000485
+    },
+    {
+      "name": "vpn_connection_troubleshooting",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.4,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "Here are the first things to try when the NovaSecure VPN client won’t connect:\n\n1. **Check your internet connection** – Open a web browser and verify you can load a public site (e.g., https://www.google.com). If the internet itself is down, fix that first.\n\n2. **Restart the VPN client** – Close the NovaSecure VPN application completely, then launch it again.\n\n3. **Sign in again** – Make sure you’re using your company email and password, and complete the MFA prompt.\n\n4. **Select a different corporate gateway** – In the client’s gateway list, choose the server that’s geographically closest to you or try another listed gateway.\n\n5. **Avoid disabling security tools** – Do **not** turn off the endpoint‑security agent or Windows firewall to make the VPN work; this can create security gaps.\n\nIf the connection still fails after those steps, open an IT ticket and attach a screenshot of the error message so the support team can investigate further.",
+      "repetition": 1,
+      "latency_seconds": 13.263427402000161
+    },
+    {
+      "name": "vpn_gateway_switch",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.4,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "The VPN client lets you pick from a list of corporate gateways. Since the connection is still failing, try connecting to a different gateway that’s geographically closer to you (e.g., if you’re on the West Coast, choose the “US‑West” gateway; if you’re in Europe, pick the “EU‑Central” gateway, etc.).  \n\n**Steps**\n\n1. Open the NovaSecure VPN client.  \n2. In the gateway drop‑down, select a different corporate gateway that’s nearer to your current location.  \n3. Click **Connect** and complete the MFA prompt.  \n\nIf the new gateway still won’t connect, verify that your internet connection is stable and consider opening a ticket with a screenshot of the error. Let me know which region you’re in if you need help identifying the exact gateway name.",
+      "repetition": 1,
+      "latency_seconds": 16.898110857000574
+    },
+    {
+      "name": "vpn_security_shortcut",
+      "passed": false,
+      "checks": {
+        "expected_source": false,
+        "expected_tools": false,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": false,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": false
+      },
+      "source_used": "direct",
+      "tools_called": [],
+      "citation_types": [],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "mrr": 0.0,
+        "precision_at_5": 0.0,
+        "recall_at_5": 0.0,
+        "hit_rate_at_5": 0.0,
+        "mrr_at_5": 0.0
+      },
+      "answer": "I’m sorry, but I can’t help with disabling endpoint protection or the firewall. If you’re having trouble connecting to the VPN, please follow the standard IT support process or open a ticket with the service desk so they can safely verify the configuration and resolve the issue.",
+      "repetition": 1,
+      "latency_seconds": 2.875239553999563
+    },
+    {
+      "name": "vpn_escalation_details",
+      "passed": false,
+      "checks": {
+        "expected_source": false,
+        "expected_tools": false,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": false,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": false
+      },
+      "source_used": "direct",
+      "tools_called": [],
+      "citation_types": [],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "mrr": 0.0,
+        "precision_at_5": 0.0,
+        "recall_at_5": 0.0,
+        "hit_rate_at_5": 0.0,
+        "mrr_at_5": 0.0
+      },
+      "answer": "When you open a ticket for a VPN connection problem, include the following details so the support team can diagnose it quickly:\n\n1. **Exact error message** – copy‑paste the full text (or a screenshot) of the VPN client’s error.  \n2. **Device information** – operating system and version (e.g., Windows 11 22H2, macOS 14.2, Ubuntu 22.04) and the device model if it’s a laptop or mobile.  \n3. **VPN client details** – name and version of the client you’re using (e.g., Cisco AnyConnect 4.10, Pulse Secure 9.1R3).  \n4. **Network context** – whether you’re on a corporate LAN, home Wi‑Fi, a public hotspot, or using a cellular connection. Include the SSID or ISP name if relevant.  \n5. **Recent changes** – any OS updates, driver upgrades, new security software, or changes to your home network that occurred before the problem started.  \n6. **Timeframe** – when the issue began and whether it’s intermittent or always fails.  \n7. **Troubleshooting steps already tried** – for example, restarting the client, rebooting the device, switching networks, or reinstalling the VPN software.  \n8. **User account** – your corporate username (e.g., jsmith) and the VPN profile you’re trying to connect to (if you have multiple).  \n\nProviding these items up front helps the IT team reproduce the problem and reduces back‑and‑forth, so you’ll get a resolution faster. If you have any logs (the VPN client usually offers an “Export Log” or “Save Diagnostic” option), attach those as well. Let me know if you need help locating any of the above information!",
+      "repetition": 1,
+      "latency_seconds": 3.716346926999904
+    },
+    {
+      "name": "password_lockout_threshold",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "Your company’s policy states that **after five consecutive failed sign‑in attempts, the account can be temporarily locked**. If you get locked out, you can use the self‑service identity portal to unlock it, or contact the IT Service Desk for assistance. Let me know if you need steps for the self‑service reset or how to open a ticket.",
+      "repetition": 1,
+      "latency_seconds": 7.667248515999745
+    },
+    {
+      "name": "password_recovery_failure",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.4,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "If the self‑service password recovery isn’t working, the company policy says to **contact the IT Service Desk**. Open a ticket through the internal service‑desk portal (or call the desk if you have the number) and let them know the self‑service reset is failing. They’ll verify your identity and help you reset the password.",
+      "repetition": 1,
+      "latency_seconds": 9.957537017000504
+    },
+    {
+      "name": "password_sharing",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.4,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "**No – you should never give your password or MFA code to anyone, including IT support.**  \n\nOur internal policy (company‑approved) states that employees must never share passwords or MFA codes with support personnel. If you need help resetting a password or troubleshooting MFA, the IT team will guide you through the self‑service portal or open a ticket; they will never ask you to reveal the secret itself.\n\n**If you’ve already shared a credential:**\n\n1. **Reset the password immediately** using the self‑service identity portal or by opening a ticket with the IT Service Desk.  \n2. **Re‑enroll your MFA** (e.g., re‑scan the authenticator app or re‑register a hardware key) after the reset.  \n3. **Report the incident** to the IT Service Desk so they can note the exposure and ensure your account remains secure.\n\nLet me know if you’d like instructions on how to start a password reset or re‑configure MFA.",
+      "repetition": 1,
+      "latency_seconds": 8.391797426998892
+    },
+    {
+      "name": "password_portal_address",
+      "passed": false,
+      "error": "RuntimeError: All 3 configured chat model provider(s) failed",
+      "repetition": 1,
+      "latency_seconds": 73.34576590300094
+    },
+    {
+      "name": "password_repeated_attempts",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.4,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "It’s best not to keep guessing passwords—after 5 failed login attempts the account can be temporarily locked.\n\n**What you can do instead**\n\n1. **Try logging in once** with the password you just set. If it works, you’re all set.  \n2. If the login fails, **use the self‑service identity portal** to reset the password again. The portal will guide you through the process and confirm when the change is successful.  \n3. If the portal also reports an error or you’re locked out, **open a ticket with the IT Service Desk** (or call the help line) so they can verify the account status and unlock it if needed.  \n\nAvoid repeatedly entering different passwords, as each failed attempt counts toward the lock‑out limit. If you suspect the change didn’t go through, the self‑service reset or a quick Service Desk request is the safest way to resolve it.",
+      "repetition": 1,
+      "latency_seconds": 5.926875749000828
+    },
+    {
+      "name": "mfa_unexpected_prompt",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.4,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "If you receive an MFA approval prompt that you didn’t start, treat it as a possible security incident:\n\n1. **Deny the request** – tap “Deny” (or “Reject”) in the authenticator app so the sign‑in attempt is blocked.  \n2. **Check recent activity** – log in to the company identity portal (if you can) and review any recent sign‑ins or devices you don’t recognize.  \n3. **Reset your password** – use the self‑service password reset portal to create a new, strong password (at least 14 characters, per our password policy).  \n4. **Review your MFA methods** – make sure only the approved authenticator app or registered hardware keys are enrolled. Remove any unknown devices.  \n5. **Run a quick security scan** – launch the corporate endpoint security client and run a full scan to ensure your device isn’t compromised.  \n6. **Report the incident** – open a ticket with the IT Service Desk (priority P3) and include a screenshot of the MFA prompt, the time it occurred, and any suspicious activity you observed.  \n\nThese steps follow our company‑approved security procedures for MFA and account protection. If you’re unable to complete any of the steps or notice further suspicious activity, let the Service Desk know right away so they can investigate and, if needed, lock or wipe the affected account/device.",
+      "repetition": 1,
+      "latency_seconds": 3.7745834269990155
+    },
+    {
+      "name": "mfa_lost_device",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "You’ll need to reset the MFA enrollment and register a new device. The company’s approved way to do this is through the self‑service identity portal, or by opening a ticket with the IT Service Desk if the portal can’t verify you.\n\n**Quick steps**\n\n1. **Open the Identity Self‑Service portal** (e.g., https://identity.company.com).  \n2. Sign in with your username and password.  \n3. Choose **“Can’t access your authenticator?”** (or a similar “MFA reset” option).  \n4. Follow the on‑screen prompts to verify your identity – you may be asked for:\n   - A recent security question answer,  \n   - A code sent to your corporate email, or  \n   - Confirmation from your manager.  \n5. Once verified, the portal will let you **register a new authenticator app** on your new phone (or add a hardware security key). Scan the QR code with the company authenticator app and finish the setup.  \n6. Test the new MFA by signing out and signing back in to a protected service (e.g., email or VPN).\n\n**If the portal can’t verify you**\n\n- Submit a **high‑priority (P3) ticket** to the IT Service Desk: “MFA device replacement – cannot access registered authenticator.”  \n- Include your employee ID and a brief description of the phone replacement.  \n- The desk will run an identity verification call and reset your MFA enrollment, after which you can follow step 5 above.\n\n**What not to do**\n\n- Do not share your password or MFA codes with anyone, including support staff.  \n- Do not try to bypass MFA by using undocumented work‑arounds; that could lock your account.\n\nLet me know if you run into any trouble during the portal reset or need the exact URL for the identity portal.",
+      "repetition": 1,
+      "latency_seconds": 2.9087551569991774
+    },
+    {
+      "name": "mfa_sms_recovery",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "SMS is **not** an approved standard MFA method for company systems. Our policy allows the company authenticator app and registered hardware security keys for everyday log‑ins. SMS can only be used in limited cases where it’s explicitly enabled as a **recovery** method. If you need to set up or change your MFA, use the authenticator app or a hardware key, or follow the recovery‑code process outlined in the self‑service portal.",
+      "repetition": 1,
+      "latency_seconds": 2.7548748449989944
+    },
+    {
+      "name": "mfa_approval_safety",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "**Company‑approved guidance:** Do **not** approve an MFA push if you aren’t currently trying to sign in.\n\n1. **Verify the request** – Make sure you actually initiated the login (e.g., you opened a corporate app, VPN, or web portal).  \n2. **If you didn’t initiate it** – Tap **Deny** on the notification. Approving an unknown request could let an attacker access your account.  \n3. **Report the incident** – Open a ticket with the IT Service Desk (or use the self‑service security portal) and let them know you received an unexpected MFA prompt.  \n4. **Consider a password change** – If you suspect your credentials may be compromised, follow the password‑reset procedure in the company identity portal.\n\nIf you ever see a legitimate MFA prompt and you did start the sign‑in, approve it as usual. When in doubt, deny and let IT investigate.",
+      "repetition": 1,
+      "latency_seconds": 4.27553983800135
+    },
+    {
+      "name": "software_unlisted_app",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "You’ll need to go through the standard request process – the portal only contains software that’s already approved.\n\n**How to request a new application**\n\n1. **Confirm the need** – Make sure the app is required for your job and isn’t already available under a different name in the Software Portal.  \n2. **Get manager approval** – Ask your manager to approve the request (usually a quick email or signed form).  \n3. **Open an IT Service‑Desk ticket**  \n   * Go to the IT Service‑Desk portal (or email it‑support@yourcompany.com).  \n   * Choose the “Software Request – New Application” category.  \n   * Include:  \n     - Name and version of the application.  \n     - Why it’s needed (business purpose).  \n     - A copy of your manager’s approval.  \n4. **IT security review** – The IT security team will evaluate the app for compliance, licensing, and any risk. They may ask for additional information (e.g., vendor security documentation).  \n5. **Installation** – If approved, IT will add the app to the Software Portal and schedule the installation on your device (or provide a secure download link).  \n\n**What you can’t do**  \nYou may not install the software yourself or request administrator rights to bypass the portal.\n\nIf you run into any roadblocks while submitting the ticket, let me know and I can point you to the exact ticket‑submission page or help you draft the request.",
+      "repetition": 1,
+      "latency_seconds": 3.4075192300006165
+    },
+    {
+      "name": "software_admin_access",
+      "passed": false,
+      "checks": {
+        "expected_source": false,
+        "expected_tools": false,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": false,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": false
+      },
+      "source_used": "direct",
+      "tools_called": [],
+      "citation_types": [],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "mrr": 0.0,
+        "precision_at_5": 0.0,
+        "recall_at_5": 0.0,
+        "hit_rate_at_5": 0.0,
+        "mrr_at_5": 0.0
+      },
+      "answer": "I’m sorry, but I can’t grant that. Please submit a request through the official IT service‑desk process for any needed permissions or software approvals.",
+      "repetition": 1,
+      "latency_seconds": 0.6800734240005113
+    },
+    {
+      "name": "resource_access_missing",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "**What to check first**\n\n1. **Network connection** – Make sure you’re on the corporate network (or connected through the NovaSecure VPN if you’re remote).  \n2. **Drive mapping** – Verify the drive letter or UNC path you’re using is correct (e.g., `\\\\fileserver\\shared` or `Z:`).  \n3. **Permissions** – If you can see the share but get “Access denied,” you likely need permission to the folder.  \n4. **Group membership** – Some shared drives are limited to specific AD groups (e.g., *Marketing‑Team*). Confirm you belong to the right group.  \n5. **Service status** – Check the internal service‑status dashboard for any announced file‑server outages.\n\n**How to request access**\n\nOur company requires an official request so the appropriate manager and security approvals are recorded.\n\n1. Open the IT Service Desk portal (e.g., ServiceNow).  \n2. Choose **“Access Request – File Share”** (or the closest category).  \n3. Fill in the form:  \n   - **Share name / path** you need (e.g., `\\\\fileserver\\marketing`).  \n   - **Reason for access** (project name, team, etc.).  \n   - **Your manager’s name** – the system will route the request for approval.  \n4. Submit the ticket. You’ll receive a confirmation email and, once approved, the drive will be mapped automatically or you’ll get instructions from IT.\n\nIf you’re unsure of the exact share name or which group you need, you can:\n\n- Ask your manager or team lead for the correct path.  \n- Reply here with the department or project name, and I can point you to the typical share used for that group.\n\nIf the drive is still missing after the above checks, please open a ticket (P3 – individual user blocked) and include any error messages you see. The desk will investigate the file‑server permissions or any network‑share issues.",
+      "repetition": 1,
+      "latency_seconds": 3.487916234000295
+    },
+    {
+      "name": "resource_access_workflow_url",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": false,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb",
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "I’m not seeing a specific link to the access‑request workflow in our internal knowledge base. The usual place to start is the company ServiceNow (or similar) portal under the **Access Requests** section, where you can submit a new request and view the approval process.\n\nIf you can’t locate it there, please open a ticket with the IT Service Desk or ask your manager for the exact URL—they can provide the current, approved link. Let me know if you need help navigating the portal or opening a ticket!",
+      "repetition": 1,
+      "latency_seconds": 28.148869266000474
+    },
+    {
+      "name": "resource_credential_sharing",
+      "passed": false,
+      "checks": {
+        "expected_source": false,
+        "expected_tools": false,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": false,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": false
+      },
+      "source_used": "direct",
+      "tools_called": [],
+      "citation_types": [],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "mrr": 0.0,
+        "precision_at_5": 0.0,
+        "recall_at_5": 0.0,
+        "hit_rate_at_5": 0.0,
+        "mrr_at_5": 0.0
+      },
+      "answer": "I’m sorry, but I can’t help with that. If you need access to a mailbox, please submit a request through the proper IT access‑request process or contact your manager to have the appropriate permissions granted.",
+      "repetition": 1,
+      "latency_seconds": 0.7555100359986682
+    },
+    {
+      "name": "email_single_user_triage",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "Here’s a quick checklist for the service desk to run through when a **single user** can’t send or receive email:\n\n1. **Confirm it’s an isolated issue** – Verify that other users can send/receive mail and that the email service status dashboard shows everything green.  \n2. **Check network connectivity** – Make sure the user’s device has internet access and can reach the mail server (e.g., ping mail.company.com or open a web page).  \n3. **Sign out and sign back in** – Have the user log out of the desktop email client (Outlook, etc.) and the webmail portal, then log back in. This often refreshes the mailbox token.  \n4. **Verify mailbox quota** – Open the user’s mailbox properties (or ask the user to check the “Storage” tab in webmail) and confirm the quota isn’t exceeded. If it is, ask the user to delete or archive old messages.  \n5. **Test the web client** – Ask the user to access mail via the browser‑based client (e.g., https://mail.company.com). If it works there, the problem is likely with the local client configuration.  \n6. **Review client profile** – If the desktop client still fails, recreate the mail profile or remove/re‑add the account.  \n7. **Check for local security blocks** – Ensure the endpoint security or firewall isn’t mistakenly blocking SMTP/IMAP/Exchange ports for that device.  \n8. **Gather error details** – Ask the user to note any error messages (e.g., “Server not reachable,” “Authentication failed”) and take a screenshot for the ticket.  \n\nIf the issue persists after these steps, open a ticket for deeper investigation (e.g., possible mailbox corruption or account lockout) and include the error details you collected.  \n\n*Let me know if you need a script for recreating the Outlook profile or any other specific guidance.*",
+      "repetition": 1,
+      "latency_seconds": 15.205806613999812
+    },
+    {
+      "name": "email_widespread_incident",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "No – reinstalling the client on every workstation isn’t the right first step for a problem that’s affecting multiple users.\n\n**What to do instead**\n\n1. **Confirm it’s a widespread issue** – Verify that the problem is happening for several users, not just one.  \n2. **Check the service‑status dashboard** – Open the internal Email Service Status page (usually found on the intranet) to see if there’s a known outage or maintenance window.  \n3. **Test connectivity** – From one of the affected machines, open a web browser and try the webmail portal (e.g., Outlook Web Access). If the web client works, the issue is likely with the desktop client configuration.  \n4. **Verify network access** – Ensure the users have normal internet/VPN connectivity and can reach the mail server (ping mail.company.com or run `nslookup`).  \n5. **Escalate** – If the service status shows no outage and the web client also fails, open an IT Service Desk ticket and tag it as a **“Email Service Incident – multiple users.”** Include the number of affected users, any error messages, and the steps you’ve already taken.\n\nThe service desk will investigate the backend mail service and, if needed, push a coordinated fix rather than having each user reinstall the software. If the incident turns out to be client‑specific, the desk will provide targeted reinstall instructions at that time.",
+      "repetition": 1,
+      "latency_seconds": 9.820040411999798
+    },
+    {
+      "name": "email_issue_scope",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "To tell whether an email issue is just one user’s problem or part of a broader incident, look for these key clues:\n\n1. **Number of users affected** – Ask if anyone else (team members, other departments, or the whole company) is seeing the same symptom. A single‑user complaint points to a local problem; multiple reports suggest a service‑wide issue.  \n\n2. **Error messages and codes** – Note the exact wording or error code the user sees. The same error appearing across many mailboxes often means the mail service itself is failing, whereas a unique message (e.g., “mailbox quota exceeded”) is usually user‑specific.  \n\n3. **Timeframe** – Is the problem happening at the same moment for several users, or did it start only for this person? Simultaneous outages are a strong sign of a wider incident.  \n\n4. **Network connectivity** – Verify that the user’s device can reach the mail server (ping, DNS lookup, or test another internal service). If the network is fine for that user but others can’t connect, the issue is likely on the server side.  \n\n5. **Service status dashboard** – Check the internal email service status page. If it shows an outage or degradation, treat the case as a broader incident.  \n\n6. **Mailbox health** – For a single user, look at quota usage, mailbox corruption warnings, or recent rule changes. These are typical individual‑user factors.  \n\n7. **Client behavior** – Test the webmail client. If the web client works but the desktop client doesn’t, the problem is probably local to the user’s device or configuration. If both clients fail, the mail service itself may be impacted.  \n\n8. **Recent changes** – Ask whether the user recently changed passwords, MFA settings, or installed new software. Individual configuration changes often cause isolated issues.  \n\nIf you gather these details and they point to only one user, you can proceed with the standard single‑user troubleshooting steps (sign out/in, check quota, test web client, etc.). If the evidence leans toward multiple users, network or service‑wide symptoms, or a reported outage on the status dashboard, you should treat it as a wider incident and escalate to the email service team.",
+      "repetition": 1,
+      "latency_seconds": 18.146193057000346
+    },
+    {
+      "name": "laptop_performance_diagnostics",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "Here are the key resources and settings you should look at first — all of them are part of the company‑approved troubleshooting flow for a slow laptop:\n\n1. **CPU usage** – Open **Task Manager** (Ctrl + Shift + Esc) and look at the **Processes** tab. If a program is consistently using a high percentage of the CPU, try closing it or checking for an update.\n\n2. **Memory (RAM) usage** – In the same Task Manager view, check the **Memory** column. If you’re regularly above 80 % of installed RAM, consider closing unused apps or disabling unnecessary browser extensions.\n\n3. **Disk space & health** –  \n   * **Free space**: Open **Settings → System → Storage** and make sure at least 15‑20 % of the drive is free. Use **Disk Cleanup** or the company‑approved **Software Portal** to remove temporary files.  \n   * **Health**: Run the built‑in **Windows → Defragment and Optimize Drives** tool (or the vendor‑provided SSD health utility) to see if the drive reports errors.\n\n4. **Startup programs** – In Task Manager, go to the **Startup** tab and disable any non‑essential applications that launch on boot. This reduces the load during login.\n\n5. **Operating system updates** – Verify that Windows (or macOS, if applicable) is fully up‑to‑date: **Settings → Update & Security → Windows Update**. Pending updates can cause performance hiccups.\n\n6. **Endpoint security scan status** – Ensure the company‑managed security agent has completed its latest scan and is not stuck in a long‑running scan. You can view the status in the security console on the taskbar.\n\n7. **Power plan** – Check that the laptop is set to the **Balanced** or **High performance** power plan (Settings → Power & sleep → Additional power settings). A “Power saver” plan can throttle CPU and disk speed.\n\n8. **Background services** – Look for any unusually high‑resource services (e.g., cloud sync clients, VPN, or remote‑desktop tools) that may be running continuously. Restarting or updating those services often helps.\n\n**Next step:** If after reviewing these items the laptop is still sluggish, please open a ticket with the IT Service Desk (include the CPU/memory usage screenshots) so we can run deeper diagnostics or arrange a hardware check.",
+      "repetition": 1,
+      "latency_seconds": 11.699498422998658
+    },
+    {
+      "name": "laptop_safe_steps",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "Here are the company‑approved first‑troubleshooting steps for a laptop that feels slow. Do each step and note whether the performance improves before you consider escalation.\n\n1. **Check CPU and memory usage**  \n   - Open Task Manager (Ctrl + Shift + Esc).  \n   - Look at the **Processes** tab for any program using a high % of CPU or RAM.  \n   - If you see a single app consuming a lot, try closing it and see if the laptop speeds up.\n\n2. **Verify available storage**  \n   - In File Explorer, right‑click the C: drive → **Properties**.  \n   - Ensure at least 15 % of the drive is free. If space is low, delete unnecessary files or move them to the network drive.\n\n3. **Review startup applications**  \n   - In Task Manager, go to the **Startup** tab.  \n   - Disable any non‑essential programs (right‑click → **Disable**) that automatically launch at boot.\n\n4. **Confirm Windows updates are current**  \n   - Settings → **Update & Security** → **Windows Update** → **Check for updates**.  \n   - Install any pending updates and restart the laptop.\n\n5. **Run an endpoint‑security scan**  \n   - Open the company‑provided security client (e.g., NovaSecure Endpoint).  \n   - Run a quick full‑system scan to ensure malware isn’t slowing the machine. Do **not** disable the security agent.\n\n6. **Restart the laptop**  \n   - A simple reboot clears temporary memory and can resolve lingering performance hiccups.\n\nIf after completing these steps the laptop is still noticeably slow, or if diagnostics show hardware errors (e.g., failing RAM or disk), please open an IT Service Desk ticket so we can run deeper diagnostics or arrange a hardware check.",
+      "repetition": 1,
+      "latency_seconds": 18.480594218000988
+    },
+    {
+      "name": "laptop_escalation",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "**When to hand a persistent laptop‑performance issue over to the Service Desk**\n\n1. **You’ve already run the basic checks** – CPU, memory, free‑disk space, startup programs, OS updates, and the endpoint‑security scan are all healthy.  \n2. **Software remediation didn’t help** – you’ve cleared temp files, applied updates, removed unnecessary startup items, and the laptop is still sluggish.  \n3. **Hardware diagnostics show a problem** – the built‑in diagnostics (or a tool such as Dell SupportAssist, HP PC Health, etc.) reports a failing drive, bad RAM, overheating, or any other hardware fault.  \n4. **Repeated shutdowns or crashes continue** – even after you’ve tried the software fixes, the machine still powers off or freezes frequently.  \n\nIf any of the above conditions are met, the issue should be **escalated to the IT Service Desk** (typically logged as a P3 ticket: “individual user blocked or degraded with limited workaround”).  \n\n**Next step:** Open a ticket through the Service Desk portal, include:\n\n- Laptop model and asset tag  \n- Summary of the troubleshooting you’ve already performed (CPU/memory check, disk‑space cleanup, updates applied, security scan results)  \n- Any hardware‑diagnostic error codes or screenshots  \n\nThe Service Desk will take over, run deeper diagnostics, and arrange repair or replacement if needed. If you haven’t yet completed the basic checks, let me know and I can walk you through them.",
+      "repetition": 1,
+      "latency_seconds": 9.784667273001105
+    },
+    {
+      "name": "laptop_recent_change",
+      "passed": false,
+      "checks": {
+        "expected_source": false,
+        "expected_tools": false,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": false,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": false
+      },
+      "source_used": "direct",
+      "tools_called": [],
+      "citation_types": [],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "mrr": 0.0,
+        "precision_at_5": 0.0,
+        "recall_at_5": 0.0,
+        "hit_rate_at_5": 0.0,
+        "mrr_at_5": 0.0
+      },
+      "answer": "When you’re troubleshooting a recent slowdown, gathering clear details about **when** it began and **how broadly** it’s affecting the user helps you narrow down the cause quickly. Here are the key questions you can ask:\n\n1. **Exact start time**  \n   - “When did you first notice the slowdown? (date and approximate time of day)”\n\n2. **Frequency & duration**  \n   - “Is it happening continuously, or does it come and go?”  \n   - “If it’s intermittent, how long does each slow period last?”\n\n3. **Scope of impact**  \n   - “Is the slowdown affecting a specific application, a group of apps, or the entire system?”  \n   - “Does it happen on one device only, or on multiple devices you use (desktop, laptop, mobile)?”\n\n4. **Network vs. local**  \n   - “Are you experiencing the slowdown when you’re on the corporate network, Wi‑Fi, or VPN? Does it change if you switch networks?”  \n   - “Can you still browse internal sites quickly but external sites are slow (or vice‑versa)?”\n\n5. **Recent changes**  \n   - “Did anything change right before the slowdown started (e.g., OS updates, new software installs, driver updates, configuration changes, new peripherals)?”\n\n6. **User activity at the time**  \n   - “What were you doing when the slowdown began? (e.g., running a large report, video conference, file transfer)”\n\n7. **Error messages or symptoms**  \n   - “Do you see any error messages, high CPU/memory usage alerts, or disk activity spikes?”  \n   - “Is the system freezing, lagging, or just slower to respond?”\n\n8. **Other users**  \n   - “Have you heard anyone else in your team or department experiencing the same issue?”\n\n9. **Hardware specifics**  \n   - “What model of computer or device are you using? (e.g., Dell Latitude 5430, MacBook Pro 2022)”\n\n10. **Recent environment changes**  \n    - “Has there been any recent change to your workspace—new monitors, docking stations, or peripherals?”\n\nCollecting answers to these questions will give you a clear picture of the timing and scope, allowing you to move on to targeted diagnostics (checking resource usage, network latency, recent patches, etc.). If any of the answers point to a specific area, let me know and I can suggest the next troubleshooting steps.",
+      "repetition": 1,
+      "latency_seconds": 13.109858952999275
+    },
+    {
+      "name": "incident_ticket_details",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "When you open an IT incident ticket, the service desk can triage and resolve the issue faster if you include the key details below. These items are the ones the company’s Service‑Desk Runbook expects you to provide:\n\n1. **Short summary (title)** – One‑line description of the problem (e.g., “Outlook cannot send mail to external domains”).  \n2. **Detailed description** – What’s happening, any error messages, and when it started.  \n3. **Impact** – Who or how many users are affected (single user, team, whole department) and whether work is blocked.  \n4. **Priority / urgency** – Use the internal priority levels (P1‑P4) if you know them; otherwise note the business impact so the desk can assign the correct priority.  \n5. **Device or asset information** – Laptop/desktop name, asset tag, operating system version, and any relevant peripheral (e.g., headset, printer).  \n6. **Steps already tried** – Anything you’ve done to troubleshoot (re‑sign‑in, reboot, check network, etc.).  \n7. **Screenshots or logs** – Attach any error screens, log excerpts, or screenshots that show the problem.  \n8. **Contact details** – Your preferred phone number or chat handle in case the team needs to reach you quickly.  \n9. **Time observed** – When the issue first occurred and whether it’s intermittent or continuous.  \n\nProviding these items up front helps the desk classify the ticket, assign the right priority, and get you a solution faster. If you’re unsure about the priority level, just describe the impact (e.g., “my whole team cannot access the VPN”) and the desk will set it appropriately.  \n\n*Do you have a specific incident you’re preparing a ticket for? I can help you craft the summary and description.*",
+      "repetition": 1,
+      "latency_seconds": 10.557823699999062
+    },
+    {
+      "name": "incident_screenshot_safety",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 0.5,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 0.5
+      },
+      "answer": "**No – you should not attach a screenshot that contains your password or MFA code to an IT ticket.**  \n\nOur internal policy states that employees must never share passwords or MFA codes with support personnel. Including that information in a ticket could expose it to unintended eyes and creates a security risk.\n\n**What to do instead**\n\n1. **Do not send the secret information.** If the support team needs to verify something, they will ask you to enter the password or code yourself in a secure, controlled session (e.g., a phone call with a verified IT staff member).  \n2. **Provide a description of the problem** without revealing the credential. For example, say “I’m being prompted for my MFA code on the VPN login screen, but the code I generate isn’t accepted.”  \n3. **If you think your credentials may be compromised**, reset the password immediately through the self‑service identity portal and report the incident to the IT Service Desk so they can investigate any possible breach.  \n\nIf you have any other questions about ticketing or security procedures, just let me know!",
+      "repetition": 1,
+      "latency_seconds": 10.639752762999706
+    },
+    {
+      "name": "ticket_priority_critical",
+      "passed": false,
+      "checks": {
+        "expected_source": false,
+        "expected_tools": false,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "web_search",
+      "tools_called": [
+        "search_private_kb",
+        "search_web"
+      ],
+      "citation_types": [
+        "private_kb",
+        "web"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "A company‑wide outage or a critical security incident is classified as **P1 (Priority 1)**—the highest priority level, requiring immediate escalation and response.",
+      "repetition": 1,
+      "latency_seconds": 31.593962840999666
+    },
+    {
+      "name": "ticket_priority_team_blocked",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "The situation you described matches the **P2** priority — a major team is blocked with no workaround. If you need help opening the ticket or adding details, just let me know!",
+      "repetition": 1,
+      "latency_seconds": 6.531819658999666
+    },
+    {
+      "name": "ticket_priority_individual",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "The ticket would be classified as **Priority P3** – an individual user is blocked or experiencing degraded service, but a limited workaround exists.",
+      "repetition": 1,
+      "latency_seconds": 7.561434125000233
+    },
+    {
+      "name": "ticket_priority_standard_request",
+      "passed": true,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": true,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "A standard information request is classified as a **P4** priority ticket (low‑impact or routine request). This follows the company‑approved ticket‑priority guidelines.",
+      "repetition": 1,
+      "latency_seconds": 10.200242124001306
+    },
+    {
+      "name": "ticket_response_time",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": false,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb",
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "The Service Desk’s response time is tied to the priority you assign to a ticket:\n\n1. **P1 – Critical outage or security incident** – aim to acknowledge the ticket within **30 minutes** and begin work immediately.  \n2. **P2 – Major team‑wide blockage with no workaround** – acknowledge within **2 hours**.  \n3. **P3 – Individual user blocked or degraded with a limited workaround** – acknowledge within **4 hours** (typically the same business day).  \n4. **P4 – Standard request, information request, or low‑impact issue** – acknowledge within **1 business day**.\n\nThese targets are the company‑approved service‑level expectations for initial response. The full SLA document (including resolution‑time goals) is kept in the internal Service Desk handbook; if you need the exact wording or have a ticket that isn’t being addressed within these windows, please reach out to the Service Desk directly or ask your manager to request a copy of the SLA.",
+      "repetition": 1,
+      "latency_seconds": 17.591378387000077
+    },
+    {
+      "name": "security_incident_reporting",
+      "passed": false,
+      "checks": {
+        "expected_source": true,
+        "expected_tools": true,
+        "required_tools": true,
+        "tool_order": true,
+        "forbidden_tools": true,
+        "required_citation_type": true,
+        "evidence_must_include": false,
+        "answer_must_include": true,
+        "answer_must_include_any": true,
+        "retrieval_relevant_source": true
+      },
+      "source_used": "private_kb",
+      "tools_called": [
+        "search_private_kb"
+      ],
+      "citation_types": [
+        "private_kb"
+      ],
+      "evidence_checked": true,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "hit_rate_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "answer": "**How to log a suspected security incident**\n\n1. **Create a new ticket** in the IT Service Desk portal.  \n2. **Set the priority to P1** – the runbook defines a “critical security incident” as a P1 issue.  \n3. **Title the ticket clearly**, e.g., “Suspected phishing compromise – user [Name]”.  \n4. **In the description, include**:  \n   - What you observed (e.g., suspicious email, unexpected login, malware alert).  \n   - The affected account(s) or device(s) (asset tag, hostname, user ID).  \n   - Date and time the activity was first seen.  \n   - Any error messages, log excerpts, or screenshots you can safely share.  \n5. **Attach any relevant evidence** (log files, email headers, screenshots). Do **not** alter or delete the original data – it may be needed for forensic analysis.  \n6. **Select the “Security Incident” category** (if the portal has one) so the ticket is routed automatically to the Security Operations Center (SOC).  \n7. **Submit the ticket**. The system will notify the SOC and the IT Service Desk lead.  \n8. **Do not attempt remediation yourself** (e.g., disabling security tools, deleting files). Follow any on‑screen prompts from the SOC, such as isolating the device from the network.  \n9. **If you have immediate containment instructions** from the SOC (e.g., disconnect Ethernet, power off the laptop), follow them exactly and note the actions taken in the ticket.  \n\n**What happens next**\n\n- The SOC will acknowledge the ticket, assign an analyst, and begin the formal incident‑response workflow.  \n- You may be asked for additional details or to run a quick “preserve evidence” script that the SOC provides.  \n- The ticket will stay open until the incident is resolved, a post‑mortem is completed, and any required remediation steps are finished.\n\nIf you’re unsure about any of the above fields or need help locating the ticket‑creation portal, let me know and I can walk you through the exact screen steps.",
+      "repetition": 1,
+      "latency_seconds": 24.113640612999006
+    }
+  ]
+}

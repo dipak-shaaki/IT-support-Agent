@@ -12,7 +12,9 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.tools import tool
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langchain_tavily import TavilySearch
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
@@ -49,16 +51,100 @@ _web_search = None
 def llm():
     global _llm
     if _llm is None:
-        if not settings.groq_api_key:
-            raise RuntimeError("GROQ_API_KEY is missing")
-        _llm = ChatGroq(
-            model=settings.groq_model,
-            temperature=0,
-            api_key=settings.groq_api_key,
-            reasoning_format="parsed",
-            max_tokens=2048,
-        )
-    return _llm
+        configured_models = []
+        if settings.groq_api_key:
+            configured_models.append(
+                ChatGroq(
+                    model=settings.groq_model,
+                    temperature=0,
+                    api_key=settings.groq_api_key,
+                    reasoning_format="parsed",
+                    max_tokens=2048,
+                )
+            )
+        if settings.gemini_api_key:
+            configured_models.append(
+                ChatGoogleGenerativeAI(
+                    model=settings.gemini_model,
+                    temperature=0,
+                    api_key=settings.gemini_api_key,
+                )
+            )
+        if settings.openai_api_key:
+            configured_models.append(
+                ChatOpenAI(
+                    model=settings.openai_model,
+                    api_key=settings.openai_api_key,
+                )
+            )
+        if not configured_models:
+            raise RuntimeError(
+                "No chat model API key is configured; set GROQ_API_KEY, "
+                "GEMINI_API_KEY, or OPENAI_API_KEY"
+            )
+        _llm = configured_models
+    return _llm[0]
+
+
+def fallback_llms():
+    return _llm[1:] if _llm is not None else []
+
+
+def _invoke_with_fallbacks(models, messages):
+    failures = []
+    for model in models:
+        try:
+            return model.invoke(messages)
+        except Exception as exc:
+            provider = type(model).__name__
+            failures.append(f"{provider}: {type(exc).__name__}: {exc}")
+            logger.warning(
+                "Chat model %s failed (%s: %s); trying the next configured provider",
+                provider,
+                type(exc).__name__,
+                exc,
+            )
+    raise RuntimeError(
+        f"All {len(models)} configured chat model provider(s) failed: "
+        + " | ".join(failures)
+    )
+
+
+def _stream_with_fallbacks(models, messages, writer):
+    failures = []
+    for model in models:
+        response = None
+        output_started = False
+        try:
+            for chunk in model.stream(messages):
+                text = _content_text(chunk.content)
+                if text:
+                    output_started = True
+                    writer({"type": "token", "text": text})
+                response = chunk if response is None else response + chunk
+            if response is None:
+                raise RuntimeError("The model returned no response chunks")
+            return response
+        except Exception as exc:
+            if output_started:
+                raise RuntimeError(
+                    f"Chat model {type(model).__name__} streaming failed after "
+                    "output began; refusing to retry to avoid duplicating a "
+                    f"partial response: {type(exc).__name__}: {exc}"
+                ) from exc
+            provider = type(model).__name__
+            failures.append(f"{provider}: {type(exc).__name__}: {exc}")
+            logger.warning(
+                "Chat model %s failed before streaming output (%s: %s); "
+                "trying the next configured provider",
+                provider,
+                type(exc).__name__,
+                exc,
+            )
+    raise RuntimeError(
+        f"All {len(models)} configured chat model provider(s) failed: "
+        + " | ".join(failures)
+    )
 
 
 def web_search_provider():
@@ -214,20 +300,16 @@ def call_agent(state: AgentState):
     if state["private_kb_searched"]:
         available_tools.append(search_web)
 
-    model = llm().bind_tools(available_tools)
+    models = [
+        llm().bind_tools(available_tools),
+        *(fallback.bind_tools(available_tools) for fallback in fallback_llms()),
+    ]
     messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
     if state["stream_tokens"]:
-        response = None
         writer = get_stream_writer()
-        for chunk in model.stream(messages):
-            text = _content_text(chunk.content)
-            if text:
-                writer({"type": "token", "text": text})
-            response = chunk if response is None else response + chunk
-        if response is None:
-            raise RuntimeError("The model returned no response chunks")
+        response = _stream_with_fallbacks(models, messages, writer)
     else:
-        response = model.invoke(messages)
+        response = _invoke_with_fallbacks(models, messages)
     trace = state["trace"]
     if response.tool_calls:
         for call in response.tool_calls:

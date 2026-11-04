@@ -11,7 +11,7 @@ from redis.exceptions import RedisError
 
 from app.core.config import get_settings
 from app.rag.workflow import ask, agent_graph, initial_state
-from app.rag.vectorstore import add_documents 
+from app.rag.vectorstore import replace_documents
 from app.services.conversation import append_turn, load_conversation, save_conversation
 from app.services.ingestion import load_file, chunk_documents, SUPPORTED
 from app.services.audit import (
@@ -190,5 +190,7 @@ async def ingest(file: UploadFile = File(...), x_admin_key: str = Header(default
     dest.write_bytes(await file.read())
     docs = load_file(dest)
     chunks = chunk_documents(docs)
-    ids = add_documents(chunks)
+    if not chunks:
+        raise HTTPException(status_code=422, detail="The uploaded document contains no indexable text")
+    ids = replace_documents(chunks)
     return {"message": "Document indexed", "file": dest.name, "chunks": len(chunks), "ids_created": len(ids)}
