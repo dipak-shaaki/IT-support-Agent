@@ -1,4 +1,6 @@
 .env
+**/.env
+**/.env.*
 .git
 .gitignore
 .vscode
@@ -10,5 +12,7 @@ venv
 .venv
 env
 .pytest_cache
+frontend/node_modules
+frontend/dist
 tests
 *.log

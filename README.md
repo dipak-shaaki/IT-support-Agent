@@ -1,6 +1,6 @@
 # IT Support Agent
 
-An internal IT-support assistant that answers from a private company knowledge base first and uses public web search only when it is needed. The application includes a streaming chat UI, document ingestion, and an audit dashboard.
+An internal IT-support assistant that answers from a private company knowledge base. Tavily public web search is reserved for live outage and service-status questions. The application includes a streaming chat UI, document ingestion, and an audit dashboard.
 
 ## Features
 
@@ -9,7 +9,7 @@ An internal IT-support assistant that answers from a private company knowledge b
 - Private knowledge retrieval using Pinecone and local Hugging Face embeddings.
 - Hybrid retrieval that fuses Pinecone vector results with a local BM25 index using reciprocal rank fusion (RRF).
 - Private-KB-first tool availability and a bounded model/tool loop.
-- Tavily web search for current service status and relevant public vendor information when private guidance is insufficient.
+- Tavily web search for live outage and service-status questions only, after the private knowledge-base lookup.
 - FastAPI endpoints for chat, token-streaming chat, document ingestion, health, and audit statistics.
 - Redis-backed conversation memory with configurable expiration and a browser "New chat" control.
 - Browser-based chat and operational dashboard.
@@ -34,9 +34,9 @@ Question → Groq agent → tool call? ── no ──→ Direct response
         Grounded final response
 ```
 
-The model requests tools using native tool calls; it does not merely receive a prompt asking it to imitate a call. A LangGraph `ToolNode` executes each requested function and returns its result to the model. The graph exposes only the private-KB tool initially; Tavily becomes available after a private search has run. For ordinary IT questions, the assistant uses web search only if the private results do not sufficiently answer the question.
+The model requests tools using native tool calls; it does not merely receive a prompt asking it to imitate a call. A LangGraph `ToolNode` executes each requested function and returns its result to the model. The graph exposes only the private-KB tool for ordinary questions. Tavily is made available only for outage or live service-status requests, and only after the private-KB lookup.
 
-Questions about live service status or outages are checked against the private KB first, then automatically sent to web search because internal runbooks cannot establish current vendor status. If a user explicitly asks about a named organization's public IT, employee, or workplace policy, the assistant also checks the private KB first and, if needed, searches for that organization's policy on its official website. It does not substitute another organization's policy or present public information as the user's employer's policy. A company mention alone does not trigger a web search, and employee-specific or confidential information is never sent to public search.
+Questions about live service status or outages are checked against the private KB first, then automatically sent to web search because internal runbooks cannot establish current vendor status. All other requests—including vendor setup, troubleshooting, and external organizations' policies—are answered from the private KB or identified as undocumented; they do not trigger public search. Employee-specific or confidential information is never sent to public search.
 
 ## Technology
 
@@ -48,7 +48,7 @@ Questions about live service status or outages are checked against the private K
 | Private retrieval | Pinecone, Hugging Face sentence-transformers, BM25, reciprocal rank fusion |
 | Web search | Tavily |
 | Document ingestion | PyPDF, python-docx, LangChain loaders and text splitters |
-| User interface | HTML, CSS, JavaScript |
+| User interface | React, TypeScript, Vite |
 | Audit storage | SQLite |
 | Python environment and dependencies | uv |
 
@@ -57,30 +57,51 @@ Questions about live service status or outages are checked against the private K
 ```text
 .
 ├── app/
-│   ├── api/routes.py           # HTTP API routes
+│   ├── agent/                  # Agent policy, prompts, tools, graph, and state
+│   │   ├── graph.py            # LangGraph assembly and ask() entry point
+│   │   ├── model.py            # LLM providers and fallback behavior
+│   │   ├── nodes.py            # Graph node implementations and routing
+│   │   ├── policy.py           # Search policy classification
+│   │   ├── prompts.py          # Agent system prompt
+│   │   ├── state.py            # LangGraph state schema
+│   │   └── tools.py            # Private-KB and public web tools
+│   ├── api/                    # HTTP routes and request schemas
 │   ├── core/                   # Settings and logging
-│   ├── rag/                    # Agent state, workflow, and vector store
-│   ├── services/               # Document ingestion and audit storage
-│   └── main.py                 # FastAPI app and web pages
+│   ├── rag/                    # Retrieval, vector store, compatibility exports
+│   ├── services/               # Document ingestion, conversation, and audit
+│   └── main.py                 # FastAPI app and built frontend hosting
+├── frontend/
+│   ├── src/api/                # Typed calls to the FastAPI endpoints
+│   ├── src/components/         # Shared React UI components
+│   ├── src/pages/              # Chat and operations dashboard
+│   ├── .env.example            # Public frontend configuration template
+│   └── package.json            # Frontend dependencies and scripts
 ├── evals/
 │   ├── cases.jsonl             # Labeled agent evaluation scenarios
 │   └── run.py                  # Live evaluation runner
 ├── data/sample_kb/             # Sample IT documents to index
 ├── docs/                       # Project background documents
-├── static/                     # Browser JavaScript and CSS
-├── templates/                  # Chat and dashboard pages
 ├── tests/                      # API, ingestion, audit, and tool-calling tests
 ├── uploads/                    # Uploaded documents
 ├── .env.example                # Environment variable template
 ├── Dockerfile
 ├── pyproject.toml              # Project metadata and dependencies
+├── frontend/package-lock.json  # Reproducible frontend dependency lock
 └── uv.lock                     # Reproducible dependency lock
 ```
+
+Agent orchestration lives in `app/agent`; retrieval/indexing stays in `app/rag`,
+and transport and persistence remain in `app/api` and `app/services`. The former
+`app.rag.workflow` and `app.rag.state` imports are retained as compatibility
+exports; new code should import from `app.agent`. The React app in `frontend/`
+calls the existing FastAPI endpoints. FastAPI serves the production Vite build
+from `frontend/dist`; local frontend development uses Vite's `/api` proxy.
 
 ## Requirements
 
 - Python 3.11 or newer.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/).
+- Node.js 20.19 or newer (or 22.12 or newer) and npm.
 - API credentials for Groq, Tavily, and Pinecone.
 
 ## Set up
@@ -108,13 +129,37 @@ sudo systemctl enable --now redis-server
 redis-cli ping
 ```
 
-Redis should respond with `PONG`. Make sure `.env` uses `REDIS_URL=redis://localhost:6379/0`, then run the app:
+Redis should respond with `PONG`. Make sure `.env` uses
+`REDIS_URL=redis://localhost:6379/0`. Run the backend in one terminal:
 
 ```bash
-uv run --env-file .env uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
+uv run --env-file .env uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open [http://127.0.0.1:8080](http://127.0.0.1:8080) for chat or [http://127.0.0.1:8080/dashboard](http://127.0.0.1:8080/dashboard) for the audit dashboard. FastAPI's interactive API documentation is at [http://127.0.0.1:8080/docs](http://127.0.0.1:8080/docs).
+Start the React development server in another terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173) for chat or
+[http://127.0.0.1:5173/dashboard](http://127.0.0.1:5173/dashboard) for the
+operations dashboard. Vite proxies `/api` requests to FastAPI on port 8000.
+FastAPI's interactive API documentation remains at
+[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+To build and serve the frontend through FastAPI locally:
+
+```bash
+cd frontend && npm ci && npm run build
+cd ..
+uv run --env-file .env uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Then open `http://127.0.0.1:8000`. The Docker image builds the frontend and
+serves it from FastAPI automatically.
 
 ## API overview
 
@@ -130,7 +175,7 @@ Open [http://127.0.0.1:8080](http://127.0.0.1:8080) for chat or [http://127.0.0.
 Example request:
 
 ```bash
-curl -X POST http://127.0.0.1:8080/api/chat \
+curl -X POST http://127.0.0.1:8000/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"question":"How do I connect to the company VPN?"}'
 ```
@@ -138,7 +183,7 @@ curl -X POST http://127.0.0.1:8080/api/chat \
 To index a document, send a supported file to `/api/ingest` with the `x-admin-key` header set to `ADMIN_API_KEY`. The file is parsed, chunked, embedded, and stored in Pinecone; the local BM25 corpus is updated too. Uploading a revised file with the same filename replaces its previous indexed chunks. The statistics endpoint uses the same header.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/api/ingest \
+curl -X POST http://127.0.0.1:8000/api/ingest \
   -H 'x-admin-key: YOUR_ADMIN_API_KEY' \
   -F 'file=@data/sample_kb/service_desk_runbook.md'
 ```
@@ -146,6 +191,10 @@ curl -X POST http://127.0.0.1:8080/api/ingest \
 Chat requests may include a `conversation_id` UUID. If omitted, the API creates one and returns it in the response (or the stream's `done` event). Reuse that ID on subsequent requests to continue the conversation. The web UI stores the ID in browser local storage and restores the transcript; use **New chat** to start a separate conversation. The server retains up to 20 messages (10 exchanges) and expires inactive conversations after 24 hours by default.
 
 The streaming endpoint sends `token` events as the model generates its final answer, `trace` events as agent/tool steps complete, and a final `done` event with the complete answer and citations. Failures are sent as `error` events.
+
+Chat questions are trimmed, must not be blank, and are limited to 400 tokens using the `cl100k_base` tokenizer, plus a 12,000-character hard limit to bound request processing. Token counts are an estimate for providers with different tokenizers. The API validates request and response shapes; oversized questions return HTTP 422 (or an SSE request error before streaming begins).
+
+Backend logs include the submitted question's character and `cl100k_base` token counts. Each model call logs provider-reported input, output, and total tokens, correlated by conversation ID; these counts include separate model/tool-loop calls and should be summed for a turn. If a provider omits usage metadata, its model-call token counts are logged as `unavailable`. Question contents and model prompts are not written to these token-usage log entries.
 
 ## Configuration
 
@@ -166,6 +215,12 @@ The streaming endpoint sends `token` events as the model generates its final ans
 | `ADMIN_API_KEY` | Shared key for the audit statistics and ingestion endpoints |
 
 At least one model API key is required. The default models are `openai/gpt-oss-120b` for Groq, `gemini-3.8-flash` for Gemini, and `gpt-5.4-mini` for OpenAI. Fallbacks apply to request failures before a streamed response starts; a stream that fails after sending tokens is not retried to avoid duplicating output.
+
+The optional `frontend/.env` file may define `VITE_API_BASE_URL` when the UI is
+hosted separately from FastAPI. Leave it empty for the same-origin deployment
+and Vite's local API proxy. Any `VITE_*` setting is embedded in browser assets
+and is public; never put API keys or other secrets in frontend environment
+variables.
 
 For an agent-based LangSmith workspace, create the agent and environment first, then set `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`, `LANGSMITH_AGENT_ID`, and `LANGSMITH_AGENT_ENVIRONMENT` in `.env`. Use the agent's identifier (not its display name) and an existing environment such as `development`. Start commands with `uv run --env-file .env ...`. Traces may contain user prompts, retrieved documents, and model answers; enable tracing only with data approved for the configured LangSmith workspace.
 
@@ -197,7 +252,7 @@ Put representative, reviewed user questions in this file and label which source 
 uv run --env-file .env --locked --group dev python -m evals.run
 ```
 
-The checked-in benchmark currently has 45 scenarios, including 41 with relevant-source labels. The runner calls the configured Groq model and Pinecone index (and Tavily for current-status and external-policy cases). Save a report and repeat each case to collect latency samples:
+The checked-in benchmark currently has 45 scenarios, including 41 with relevant-source labels. The runner calls the configured Groq model and Pinecone index (and Tavily for current-status cases only). Save a report and repeat each case to collect latency samples:
 
 ```bash
 uv run --env-file .env --locked --group dev python -m evals.run \

@@ -13,7 +13,7 @@ from typing import Any
 from langchain_core.messages import ToolMessage
 
 from app.core.config import get_settings
-from app.rag.workflow import ask
+from app.agent.graph import ask
 
 CASES_PATH = Path(__file__).with_name("cases.jsonl")
 logger = logging.getLogger(__name__)

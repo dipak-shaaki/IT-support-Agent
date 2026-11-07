@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 from uuid import UUID
 
 from app.api import routes
@@ -49,6 +50,16 @@ def test_chat_rejects_questions_shorter_than_two_characters():
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize("path", ["/api/chat", "/api/chat/stream"])
+def test_chat_endpoints_reject_questions_over_token_limit(path):
+    question = ("hello " * 401).strip()
+
+    response = create_client().post(path, json={"question": question})
+
+    assert response.status_code == 422
+    assert "400-token limit" in response.text
+
+
 def test_chat_returns_answer_and_writes_audit(monkeypatch):
     result = {
         "answer": "Use the VPN client.",
@@ -61,7 +72,9 @@ def test_chat_returns_answer_and_writes_audit(monkeypatch):
     conversation_saves = []
     monkeypatch.setattr(routes, "load_conversation", lambda conversation_id: [])
     monkeypatch.setattr(routes, "save_conversation", lambda conversation_id, messages: conversation_saves.append((conversation_id, messages)))
-    monkeypatch.setattr(routes, "ask", lambda question, history: result)
+    monkeypatch.setattr(
+        routes, "ask", lambda question, history, request_id="": result
+    )
     monkeypatch.setattr(
         routes,
         "write_audit",
@@ -104,7 +117,7 @@ def test_chat_restores_history_for_follow_up(monkeypatch):
     monkeypatch.setattr(
         routes,
         "ask",
-        lambda question, previous: (
+        lambda question, previous, request_id="": (
             captured.update(question=question, history=previous)
             or {
                 "answer": "On macOS, install the company VPN client for Mac.",
@@ -128,7 +141,10 @@ def test_chat_restores_history_for_follow_up(monkeypatch):
     assert captured == {"question": "What about on Mac?", "history": history}
 
 
-def test_stream_returns_conversation_id_and_saves_turn(monkeypatch):
+def test_stream_returns_conversation_id_and_saves_turn(monkeypatch, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="app.api.routes")
     conversation_id = UUID("f0bb9e7a-7205-49c2-9daf-d4bcbe117c1a")
     saved = []
 
@@ -174,6 +190,50 @@ def test_stream_returns_conversation_id_and_saves_turn(monkeypatch):
                 AIMessage(content="Hello! How can I help?"),
             ],
         )
+    ]
+    assert "Chat stream started" in caplog.text
+    assert "question_tokens=2" in caplog.text
+    assert "Chat stream completed" in caplog.text
+
+
+def test_silent_stream_saves_user_message_without_empty_assistant(monkeypatch):
+    conversation_id = UUID("f0bb9e7a-7205-49c2-9daf-d4bcbe117c1a")
+    history = [
+        HumanMessage(content="yes"),
+        AIMessage(content="Can you share the error?"),
+        HumanMessage(content="okay"),
+        AIMessage(content="What does the message say?"),
+        HumanMessage(content="yes"),
+        AIMessage(content="Anything else you can share?"),
+    ]
+    saved = []
+
+    class FakeGraph:
+        def stream(self, state, stream_mode):
+            yield (
+                "updates",
+                {"followup_guard": {"answer": "", "source_used": "direct"}},
+            )
+
+    monkeypatch.setattr(routes, "load_conversation", lambda requested_id: history)
+    monkeypatch.setattr(
+        routes,
+        "save_conversation",
+        lambda key, messages: saved.append((key, messages)),
+    )
+    monkeypatch.setattr(routes, "write_audit", lambda *args: None)
+    monkeypatch.setattr(routes, "agent_graph", FakeGraph())
+
+    response = create_client().post(
+        "/api/chat/stream",
+        json={"question": "yeah", "conversation_id": str(conversation_id)},
+    )
+
+    assert response.status_code == 200
+    assert '"type": "done"' in response.text
+    assert '"answer": ""' in response.text
+    assert saved == [
+        (conversation_id, [*history, HumanMessage(content="yeah")])
     ]
 
 

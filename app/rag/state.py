@@ -1,21 +1,5 @@
-from typing import Annotated
-from typing_extensions import TypedDict
+"""Compatibility export for the LangGraph state in :mod:`app.agent.state`."""
 
-from langchain_core.messages import AnyMessage
-from langgraph.graph.message import add_messages
+from app.agent.state import AgentState
 
-
-class AgentState(TypedDict):
-    messages: Annotated[list[AnyMessage], add_messages]
-    question: str
-    current_query: str
-    answer: str
-    source_used: str
-    tool_call_count: int
-    stream_tokens: bool
-    require_web_search: bool
-    external_policy_search_query: str
-    private_kb_searched: bool
-    web_searched: bool
-    trace: list[str]
-    citations: list[dict]
+__all__ = ["AgentState"]

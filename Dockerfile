@@ -1,4 +1,15 @@
-FROM python:3.11-slim
+FROM node:20-alpine AS frontend-build
+
+WORKDIR /frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+
+FROM python:3.11-slim AS app
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /bin/uv
 
@@ -15,6 +26,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
+COPY --from=frontend-build /frontend/dist /app/frontend/dist
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8080

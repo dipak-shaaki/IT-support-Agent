@@ -10,7 +10,7 @@ from rank_bm25 import BM25L
 logger = logging.getLogger(__name__)
 
 TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
-RRF_K = 60
+RRF_K = 40
 
 
 def tokenize(text: str) -> list[str]:
