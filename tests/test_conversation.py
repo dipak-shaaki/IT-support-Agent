@@ -45,6 +45,24 @@ def test_missing_conversation_returns_empty_history(monkeypatch):
     assert conversation.load_conversation(UUID(int=1)) == []
 
 
+def test_conversations_are_scoped_by_owner(monkeypatch):
+    conversation_id = UUID("f0bb9e7a-7205-49c2-9daf-d4bcbe117c1a")
+    client = FakeRedis()
+    monkeypatch.setattr(conversation, "get_redis_client", lambda: client)
+    monkeypatch.setattr(
+        conversation,
+        "get_settings",
+        lambda: type("Settings", (), {"conversation_ttl_seconds": 3600})(),
+    )
+    messages = [HumanMessage(content="How do I connect to VPN?")]
+
+    conversation.save_conversation(conversation_id, messages, owner="alice")
+
+    assert conversation.load_conversation(conversation_id, "alice") == messages
+    assert conversation.load_conversation(conversation_id, "bob") == []
+    assert client.expiry[f"conversation:alice:{conversation_id}"] == 3600
+
+
 def test_append_turn_keeps_only_recent_message_window():
     history = [
         HumanMessage(content=f"question {index}")

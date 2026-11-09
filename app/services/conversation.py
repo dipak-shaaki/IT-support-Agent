@@ -27,12 +27,15 @@ def get_redis_client() -> redis.Redis:
     )
 
 
-def _conversation_key(conversation_id: UUID) -> str:
-    return f"conversation:{conversation_id}"
+def _conversation_key(conversation_id: UUID, owner: str | None = None) -> str:
+    scope = f"{owner}:" if owner else ""
+    return f"conversation:{scope}{conversation_id}"
 
 
-def load_conversation(conversation_id: UUID) -> list[BaseMessage]:
-    serialized = get_redis_client().get(_conversation_key(conversation_id))
+def load_conversation(
+    conversation_id: UUID, owner: str | None = None
+) -> list[BaseMessage]:
+    serialized = get_redis_client().get(_conversation_key(conversation_id, owner))
     if serialized is None:
         return []
     messages = messages_from_dict(json.loads(serialized))
@@ -44,11 +47,15 @@ def load_conversation(conversation_id: UUID) -> list[BaseMessage]:
     ]
 
 
-def save_conversation(conversation_id: UUID, messages: list[BaseMessage]) -> None:
+def save_conversation(
+    conversation_id: UUID,
+    messages: list[BaseMessage],
+    owner: str | None = None,
+) -> None:
     settings = get_settings()
     retained = messages[-MAX_HISTORY_MESSAGES:]
     get_redis_client().set(
-        _conversation_key(conversation_id),
+        _conversation_key(conversation_id, owner),
         json.dumps(messages_to_dict(retained)),
         ex=settings.conversation_ttl_seconds,
     )

@@ -2,6 +2,7 @@ import type {
   ChatEvent,
   ConversationResponse,
   DashboardStats,
+  IngestJob,
   IngestResponse,
 } from '../types'
 
@@ -109,4 +110,12 @@ export async function ingestDocument(file: File, adminKey: string): Promise<Inge
   })
   if (!response.ok) throw await responseError(response)
   return response.json() as Promise<IngestResponse>
+}
+
+export async function getIngestJob(jobId: string, adminKey: string): Promise<IngestJob> {
+  const response = await fetch(apiUrl(`/api/ingest/jobs/${encodeURIComponent(jobId)}`), {
+    headers: { 'X-Admin-Key': adminKey },
+  })
+  if (!response.ok) throw await responseError(response)
+  return response.json() as Promise<IngestJob>
 }

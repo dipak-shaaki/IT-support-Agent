@@ -16,6 +16,21 @@ logger = logging.getLogger(__name__)
 MAX_TOOL_CALLS = 6
 
 
+def available_tools(state: AgentState) -> list:
+    tools = [search_private_kb]
+    if state["require_web_search"] and state["private_kb_searched"]:
+        tools.append(search_web)
+    return tools
+
+
+def _mandatory_step(state: AgentState) -> str | None:
+    if state["require_web_search"] and not state["private_kb_searched"]:
+        return "mandatory_private_search"
+    if state["require_web_search"] and not state["web_searched"]:
+        return "mandatory_web_search"
+    return None
+
+
 def route_initial_state(state: AgentState) -> Literal["agent", "followup_guard"]:
     return "followup_guard" if state["repetitive_followup"] else "agent"
 
@@ -28,13 +43,10 @@ def stop_repetitive_followup(state: AgentState):
 
 
 def call_agent(state: AgentState):
-    available_tools = [search_private_kb]
-    if state["require_web_search"] and state["private_kb_searched"]:
-        available_tools.append(search_web)
-
+    tools = available_tools(state)
     models = [
-        model.llm().bind_tools(available_tools),
-        *(fallback.bind_tools(available_tools) for fallback in model.fallback_llms()),
+        model.llm().bind_tools(tools),
+        *(fallback.bind_tools(tools) for fallback in model.fallback_llms()),
     ]
     messages = [SystemMessage(content=prompts.SYSTEM_PROMPT), *state["messages"]]
     if state["stream_tokens"]:
@@ -49,7 +61,7 @@ def call_agent(state: AgentState):
     trace = state["trace"]
     if response.tool_calls:
         for call in response.tool_calls:
-            if call["name"] in {tool.name for tool in available_tools}:
+            if call["name"] in {tool.name for tool in tools}:
                 query = call.get("args", {}).get("query", "")
                 trace = [*trace, f"Tool call → {call['name']}({query})"]
     return {"messages": [response], "trace": trace}
@@ -60,22 +72,14 @@ def route_after_agent(
 ) -> Literal["tools", "mandatory_private_search", "mandatory_web_search", "finalize"]:
     last_message = state["messages"][-1]
     if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
-        if state["require_web_search"] and not state["private_kb_searched"]:
-            return "mandatory_private_search"
-        if state["require_web_search"] and not state["web_searched"]:
-            return "mandatory_web_search"
-        return "finalize"
+        return _mandatory_step(state) or "finalize"
     if any(
         call["name"] == search_web.name
         for call in last_message.tool_calls
     ) and not (state["require_web_search"] and state["private_kb_searched"]):
         return "finalize"
     if state["tool_call_count"] >= MAX_TOOL_CALLS:
-        if state["require_web_search"] and not state["private_kb_searched"]:
-            return "mandatory_private_search"
-        if state["require_web_search"] and not state["web_searched"]:
-            return "mandatory_web_search"
-        return "finalize"
+        return _mandatory_step(state) or "finalize"
     return "tools"
 
 
@@ -129,17 +133,15 @@ def execute_tools(state: AgentState):
     if not isinstance(response, AIMessage):
         raise TypeError("Tool execution requires an assistant tool-call message")
 
-    available_tools = [search_private_kb]
-    if state["require_web_search"] and state["private_kb_searched"]:
-        available_tools.append(search_web)
-    available_names = {item.name for item in available_tools}
+    tools = available_tools(state)
+    available_names = {item.name for item in tools}
     unavailable = {
         call["name"] for call in response.tool_calls
     } - available_names
     if unavailable:
         raise ValueError(f"Model requested unavailable tools: {', '.join(sorted(unavailable))}")
 
-    result = ToolNode(available_tools).invoke({"messages": [response]})
+    result = ToolNode(tools).invoke({"messages": [response]})
     citations = list(state["citations"])
     private_kb_searched = state["private_kb_searched"]
     web_searched = state["web_searched"]

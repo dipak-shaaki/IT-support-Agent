@@ -1,5 +1,7 @@
 import logging
+import threading
 import time
+from pathlib import Path
 from uuid import uuid4
 
 from langchain_core.documents import Document
@@ -17,6 +19,8 @@ settings = get_settings()
 _embeddings = None
 _vectorstore = None
 _bm25_index = None
+_bm25_mtime = None
+_bm25_lock = threading.Lock()
 
 
 EMBEDDING_DIMENSIONS = {
@@ -70,7 +74,7 @@ def ensure_index():
 
     desired_dimension = get_embedding_dimension()
     pc = Pinecone(api_key=settings.pinecone_api_key)
-    names = [x["name"] for x in pc.list_indexes()]
+    names = {x["name"] for x in pc.list_indexes()}
 
     if settings.pinecone_index_name in names:
         index_info = pc.describe_index(settings.pinecone_index_name)
@@ -79,19 +83,28 @@ def ensure_index():
             current_dimension = index_info.get("dimension")
 
         if current_dimension is not None and current_dimension != desired_dimension:
-            pc.delete_index(name=settings.pinecone_index_name)
-            while settings.pinecone_index_name in [x["name"] for x in pc.list_indexes()]:
-                time.sleep(1)
+            # Never delete a live index from a lazy initializer; that destroys the corpus.
+            raise RuntimeError(
+                f"Pinecone index '{settings.pinecone_index_name}' has dimension "
+                f"{current_dimension}, but embedding model '{settings.embedding_model}' "
+                f"produces {desired_dimension}. Point PINECONE_INDEX_NAME at a matching "
+                "index (or re-ingest into a new one) instead of changing this process."
+            )
+        return pc.Index(settings.pinecone_index_name)
 
-    if settings.pinecone_index_name not in [x["name"] for x in pc.list_indexes()]:
-        pc.create_index(
-            name=settings.pinecone_index_name,
-            dimension=desired_dimension,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-        )
-        while not pc.describe_index(settings.pinecone_index_name).status["ready"]:
-            time.sleep(1)
+    pc.create_index(
+        name=settings.pinecone_index_name,
+        dimension=desired_dimension,
+        metric="cosine",
+        spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+    )
+    deadline = time.monotonic() + 120
+    while not pc.describe_index(settings.pinecone_index_name).status["ready"]:
+        if time.monotonic() > deadline:
+            raise RuntimeError(
+                f"Pinecone index '{settings.pinecone_index_name}' was not ready within 120s"
+            )
+        time.sleep(1)
 
     return pc.Index(settings.pinecone_index_name)
 
@@ -112,17 +125,28 @@ def get_vectorstore():
 
 
 
+def _file_mtime(path: Path) -> int | None:
+    try:
+        return path.stat().st_mtime_ns
+    except FileNotFoundError:
+        return None
+
+
 def get_bm25_index():
-    global _bm25_index
-    if _bm25_index is None:
-        # shortcut: one in-process cache; multi-worker deployments need a reload or shared index
-        _bm25_index = Bm25Index(settings.bm25_index_path)
-        if len(_bm25_index) == 0:
-            logger.warning(
-                "BM25 index %s is empty; retrieval is vector-only until documents are ingested",
-                settings.bm25_index_path,
-            )
-    return _bm25_index
+    global _bm25_index, _bm25_mtime
+    path = Path(settings.bm25_index_path)
+    mtime = _file_mtime(path)
+    with _bm25_lock:
+        # Reload when ingestion in another worker rewrites the shared corpus file.
+        if _bm25_index is None or _bm25_mtime != mtime:
+            _bm25_index = Bm25Index(path)
+            _bm25_mtime = mtime
+            if len(_bm25_index) == 0:
+                logger.warning(
+                    "BM25 index %s is empty; retrieval is vector-only until documents are ingested",
+                    settings.bm25_index_path,
+                )
+        return _bm25_index
 
 
 

@@ -4,6 +4,7 @@ from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
 
 from app.core.config import get_settings
+from app.core.privacy import redact_pii
 from app.rag.vectorstore import get_retriever
 
 settings = get_settings()
@@ -46,7 +47,7 @@ def search_private_kb(query: str) -> str:
 @tool
 def search_web(query: str) -> str:
     """Search public web information after checking the private KB."""
-    result = web_search_provider().invoke({"query": query})
+    result = web_search_provider().invoke({"query": redact_pii(query)})
     if isinstance(result, dict):
         answer = result.get("answer", "")
         results = [

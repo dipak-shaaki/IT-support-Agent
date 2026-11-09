@@ -5,8 +5,14 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from docx import Document as DocxDocument
 
+from app.rag.vectorstore import replace_documents
+
 
 SUPPORTED = {".pdf", ".txt", ".md", ".docx"}
+
+
+class EmptyDocumentError(ValueError):
+    """Raised when an upload has nothing that can be indexed."""
 
 
 
@@ -27,3 +33,11 @@ def load_file(path: Path) -> list[Document]:
 def chunk_documents(docs: Iterable[Document]) -> list[Document]:
     splitter = RecursiveCharacterTextSplitter(chunk_size=900, chunk_overlap=120, add_start_index=True)
     return splitter.split_documents(list(docs))
+
+
+def index_file(path: Path) -> tuple[int, list[str]]:
+    """Parse, chunk, embed and store one document. Used by inline and queued ingestion."""
+    chunks = chunk_documents(load_file(path))
+    if not chunks:
+        raise EmptyDocumentError("The uploaded document contains no indexable text")
+    return len(chunks), replace_documents(chunks)

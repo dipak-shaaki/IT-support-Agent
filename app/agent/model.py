@@ -6,6 +6,7 @@ from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 
 from app.core.config import get_settings
+from app.core.metrics import LLM_FAILURES
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -57,6 +58,7 @@ def llm():
                     api_key=settings.groq_api_key,
                     reasoning_format="parsed",
                     max_tokens=2048,
+                    request_timeout=settings.llm_timeout_seconds,
                 )
             )
         if settings.gemini_api_key:
@@ -65,6 +67,7 @@ def llm():
                     model=settings.gemini_model,
                     temperature=0,
                     api_key=settings.gemini_api_key,
+                    timeout=settings.llm_timeout_seconds,
                 )
             )
         if settings.openai_api_key:
@@ -72,6 +75,7 @@ def llm():
                 ChatOpenAI(
                     model=settings.openai_model,
                     api_key=settings.openai_api_key,
+                    request_timeout=settings.llm_timeout_seconds,
                 )
             )
         if not configured_models:
@@ -108,6 +112,7 @@ def invoke_with_fallbacks(models, messages, request_id: str = ""):
             return response
         except Exception as exc:
             provider = type(model).__name__
+            LLM_FAILURES.labels(provider).inc()
             failures.append(f"{provider}: {type(exc).__name__}: {exc}")
             logger.warning(
                 "Chat model %s failed (%s: %s); trying the next configured provider",
@@ -145,6 +150,7 @@ def stream_with_fallbacks(models, messages, writer, request_id: str = ""):
                     f"partial response: {type(exc).__name__}: {exc}"
                 ) from exc
             provider = type(model).__name__
+            LLM_FAILURES.labels(provider).inc()
             failures.append(f"{provider}: {type(exc).__name__}: {exc}")
             logger.warning(
                 "Chat model %s failed before streaming output (%s: %s); "

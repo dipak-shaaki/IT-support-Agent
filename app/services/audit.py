@@ -1,12 +1,23 @@
 import json
 import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
+
 from app.core.config import get_settings
 
 settings = get_settings()
 
+
+def _connect() -> sqlite3.Connection:
+    con = sqlite3.connect(settings.audit_db_path, timeout=5)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA busy_timeout=5000")
+    return con
+
+
 def init_db() -> None:
-    con = sqlite3.connect(settings.audit_db_path)
+    Path(settings.audit_db_path).parent.mkdir(parents=True, exist_ok=True)
+    con = _connect()
     con.execute(
         """CREATE TABLE IF NOT EXISTS query_audit (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,7 +31,7 @@ def init_db() -> None:
     con.close()
 
 def write_audit(question: str, source_used: str, trace: list[str]) -> None:
-    con = sqlite3.connect(settings.audit_db_path)
+    con = _connect()
     con.execute(
         "INSERT INTO query_audit(created_at, question, source_used, trace_json) VALUES (?, ?, ?, ?)",
         (datetime.now(timezone.utc).isoformat(), question, source_used, json.dumps(trace)),
@@ -30,7 +41,7 @@ def write_audit(question: str, source_used: str, trace: list[str]) -> None:
 
 
 def _rows(sql: str, params: tuple = ()) -> list[dict]:
-    con = sqlite3.connect(settings.audit_db_path)
+    con = _connect()
     con.row_factory = sqlite3.Row
     rows = [dict(r) for r in con.execute(sql, params).fetchall()]
     con.close()

@@ -1,15 +1,27 @@
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { CheckCircle2, FileUp, LoaderCircle, LockKeyhole, X } from 'lucide-react'
-import { ingestDocument } from '../api/client'
+import { getIngestJob, ingestDocument } from '../api/client'
 
 const ADMIN_KEY_STORAGE = 'it_copilot_admin_key'
+const JOB_POLL_INTERVAL_MS = 2000
+const JOB_POLL_TIMEOUT_MS = 5 * 60 * 1000
+
+async function waitForJob(jobId: string, adminKey: string) {
+  const deadline = Date.now() + JOB_POLL_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, JOB_POLL_INTERVAL_MS))
+    const job = await getIngestJob(jobId, adminKey)
+    if (job.status === 'done' || job.status === 'error') return job
+  }
+  throw new Error('Indexing is still running. Check back in a few minutes.')
+}
 
 export function UploadDialog({ onClose }: { onClose: () => void }) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [adminKey, setAdminKey] = useState(() => sessionStorage.getItem(ADMIN_KEY_STORAGE) ?? '')
   const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const [status, setStatus] = useState<{ kind: 'success' | 'error' | 'info'; text: string } | null>(null)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -28,10 +40,20 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
     sessionStorage.setItem(ADMIN_KEY_STORAGE, adminKey.trim())
     try {
       const result = await ingestDocument(file, adminKey.trim())
-      setStatus({
-        kind: 'success',
-        text: `Indexed ${result.file}: ${result.chunks} chunks added.`,
-      })
+      if ('job_id' in result) {
+        setStatus({ kind: 'info', text: `Queued ${result.file}. Indexing…` })
+        const job = await waitForJob(result.job_id, adminKey.trim())
+        if (job.status === 'error') throw new Error(job.error || 'Indexing failed.')
+        setStatus({
+          kind: 'success',
+          text: `Indexed ${job.file}: ${job.chunks} chunks added.`,
+        })
+      } else {
+        setStatus({
+          kind: 'success',
+          text: `Indexed ${result.file}: ${result.chunks} chunks added.`,
+        })
+      }
       if (fileInput.current) fileInput.current.value = ''
     } catch (error) {
       setStatus({

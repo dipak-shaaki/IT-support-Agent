@@ -47,7 +47,7 @@ def test_chat_response_rejects_empty_or_unknown_output():
         "source_used": "direct",
         "trace": [],
         "citations": [],
-        "rewritten_query": "What is happening?",
+        "retrieval_query": "What is happening?",
     }
 
     assert ChatResponse.model_validate(base).answer == "Here is the answer."
@@ -63,7 +63,7 @@ def test_silent_done_event_allows_empty_answer_for_suppressed_turn():
         answer="",
         source_used="direct",
         citations=[],
-        rewritten_query="yes",
+        retrieval_query="yes",
     )
 
     assert event.answer == ""

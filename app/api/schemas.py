@@ -41,7 +41,7 @@ class ChatResponse(BaseModel):
     source_used: Literal["direct", "private_kb", "web_search"]
     trace: list[str]
     citations: list[dict[str, str]]
-    rewritten_query: str
+    retrieval_query: str
 
 
 class ChatDoneEvent(BaseModel):
@@ -50,4 +50,4 @@ class ChatDoneEvent(BaseModel):
     answer: str
     source_used: Literal["direct", "private_kb", "web_search"]
     citations: list[dict[str, str]]
-    rewritten_query: str
+    retrieval_query: str

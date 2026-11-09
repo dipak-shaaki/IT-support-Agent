@@ -8,8 +8,14 @@ ACKNOWLEDGMENT_WORDS = {"yes", "yeah", "yep", "yup", "ok", "okay", "sure", "righ
 ACKNOWLEDGMENT_PHRASES = {"got it", "understood", "thanks", "thank you"}
 
 CURRENT_STATUS_PATTERN = re.compile(
-    r"\b(outages?|service status|status page|service health|is .+ down|"
-    r"currently unavailable|having issues right now|service disruption)\b",
+    r"\b("
+    r"(?:is|are)\b.{0,40}\b(?:down|having|experiencing)\b"
+    r"|any (?:current )?outages?"
+    r"|is there an? (?:current )?outage"
+    r"|(?:has|have|was|were) there .{0,20}outages?"
+    r"|service status|status page|service health|currently unavailable"
+    r"|having issues right now|service disruption"
+    r")",
     re.IGNORECASE,
 )
 

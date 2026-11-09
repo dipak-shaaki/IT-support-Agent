@@ -199,6 +199,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .form-status { display: flex; align-items: flex-start; gap: 7px; padding: 9px 10px; border-radius: 7px; font-size: 10px; line-height: 1.5; }
 .form-status.success { color: #3c7250; background: #eff7f0; }
 .form-status.error { color: #9a5747; background: #fbf0ed; }
+.form-status.info { color: #3f5f86; background: #eef3fa; }
 .dialog-footnote { margin: 15px 0 0; color: #9aa39d; font-size: 9px; text-align: center; }
 
 .dashboard-main { background: #f7f8f6; }

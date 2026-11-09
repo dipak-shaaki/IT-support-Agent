@@ -21,7 +21,7 @@ export type ChatEvent =
       answer: string
       source_used: string
       citations: Citation[]
-      rewritten_query: string
+      retrieval_query: string
     }
   | { type: 'error'; message: string }
 
@@ -43,9 +43,15 @@ export type ConversationResponse = {
   messages: ConversationMessage[]
 }
 
-export type IngestResponse = {
-  message: string
+export type IngestResponse =
+  | { message: string; file: string; chunks: number; ids_created: string[] }
+  | { job_id: string; status: 'queued'; file: string }
+
+export type IngestJob = {
+  job_id: string
+  status: 'queued' | 'running' | 'done' | 'error'
   file: string
   chunks: number
-  ids_created: string[]
+  ids_created: number
+  error: string
 }

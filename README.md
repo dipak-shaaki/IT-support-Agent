@@ -165,11 +165,14 @@ serves it from FastAPI automatically.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | Health check |
+| `GET` | `/api/health` | Liveness check |
+| `GET` | `/api/ready` | Readiness check for Redis and the keyword index |
+| `GET` | `/metrics` | Prometheus metrics for HTTP, chat, ingestion, and rate limiting |
 | `POST` | `/api/chat` | Ask a question and receive a complete response |
 | `POST` | `/api/chat/stream` | Ask a question and receive server-sent events |
 | `GET` | `/api/conversations/{conversation_id}` | Retrieve a conversation's recent chat transcript |
 | `POST` | `/api/ingest` | Upload and index or replace a PDF, TXT, Markdown, or DOCX file |
+| `GET` | `/api/ingest/jobs/{job_id}` | Check the status of a queued ingestion job |
 | `GET` | `/api/stats` | Read audit statistics; requires the `x-admin-key` header |
 
 Example request:
@@ -180,7 +183,9 @@ curl -X POST http://127.0.0.1:8000/api/chat \
   -d '{"question":"How do I connect to the company VPN?"}'
 ```
 
-To index a document, send a supported file to `/api/ingest` with the `x-admin-key` header set to `ADMIN_API_KEY`. The file is parsed, chunked, embedded, and stored in Pinecone; the local BM25 corpus is updated too. Uploading a revised file with the same filename replaces its previous indexed chunks. The statistics endpoint uses the same header.
+To index a document, send a supported file to `/api/ingest` with the `x-admin-key` header set to `ADMIN_API_KEY`. The file is parsed, chunked, embedded, and stored in Pinecone; the local BM25 corpus is updated too. Uploading a revised file with the same filename replaces its previous indexed chunks. The statistics endpoint uses the same header. Uploaded files are deleted after they are indexed.
+
+With `INGEST_MODE=queue`, the endpoint stores the upload, returns HTTP 202 with a `job_id`, and a worker processes the file in the background; poll `/api/ingest/jobs/{job_id}` for `queued`, `running`, `done`, or `error`. Docker Compose sets this mode and runs the worker as a separate service. The app and worker share the `data` and `uploads` volumes, which is required for the worker's BM25 updates to reach the API process.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/ingest \
@@ -213,6 +218,15 @@ Backend logs include the submitted question's character and `cl100k_base` token 
 | `REDIS_URL` | Redis connection URL for conversation history |
 | `CONVERSATION_TTL_SECONDS` | Inactivity lifetime for a conversation; defaults to 86400 seconds |
 | `ADMIN_API_KEY` | Shared key for the audit statistics and ingestion endpoints |
+| `MAX_UPLOAD_BYTES` | Maximum accepted upload size; defaults to 25 MB |
+| `AUTH_MODE` | `none` for local use, `proxy` to trust an SSO identity header; required in production |
+| `AUTH_USER_HEADER` | Identity header set by the trusted reverse proxy; defaults to `X-Auth-Request-User` |
+| `AUTH_ROLES_HEADER` | Role header set by the trusted reverse proxy; defaults to `X-Auth-Request-Roles` |
+| `AUTH_ADMIN_ROLES` | Comma-separated proxy roles that grant admin access; empty disables role-based admin |
+| `RATE_LIMIT_PER_MINUTE` | Per-identity chat request limit in a one-minute window; defaults to 30 |
+| `LLM_TIMEOUT_SECONDS` | Per-request provider timeout; defaults to 60 seconds |
+| `INGEST_MODE` | `inline` (default) or `queue`; queue mode requires a running worker |
+| `INGEST_JOB_TTL_SECONDS` | How long queued job status is retained in Redis; defaults to 86400 seconds |
 
 At least one model API key is required. The default models are `openai/gpt-oss-120b` for Groq, `gemini-3.8-flash` for Gemini, and `gpt-5.4-mini` for OpenAI. Fallbacks apply to request failures before a streamed response starts; a stream that fails after sending tokens is not retried to avoid duplicating output.
 
@@ -226,7 +240,7 @@ For an agent-based LangSmith workspace, create the agent and environment first, 
 
 Additional paths such as `AUDIT_DB_PATH`, `BM25_INDEX_PATH`, `UPLOAD_DIR`, and `SAMPLE_KB_DIR` have defaults in `app/core/config.py`.
 
-The BM25 corpus is written to `data/bm25_corpus.jsonl` by ingestion. Documents indexed before hybrid retrieval was enabled must be ingested again to appear in keyword results. If the corpus is missing or empty, retrieval logs a warning and falls back to vector-only.
+The BM25 corpus is written to `data/bm25_corpus.jsonl` by ingestion. Documents indexed before hybrid retrieval was enabled must be ingested again to appear in keyword results. If the corpus is missing or empty, retrieval logs a warning and falls back to vector-only. In queue mode the corpus file must be on storage shared by the app and worker; the Compose setup uses a named volume, while a multi-host deployment needs a shared filesystem.
 
 ## Tests
 
@@ -286,4 +300,7 @@ Compose starts Redis with persistent storage and configures the app to connect t
 - Replace the development `ADMIN_API_KEY` with a unique secret before use.
 - Conversation IDs grant access to their chat history; treat them as private and protect Redis data and backups according to your organization's retention policy.
 - Protect the application and its audit data with your organization's authentication, authorization, network, and retention controls before exposing it beyond a trusted environment.
+- In production, terminate authentication at a trusted reverse proxy and set `AUTH_MODE=proxy`. The proxy must overwrite `AUTH_USER_HEADER`; never accept that header directly from clients. Conversation history is scoped to that identity in Redis.
+- To replace the shared admin key with proxy-managed roles, set `AUTH_ADMIN_ROLES` to one or more comma-separated roles and have the proxy overwrite `AUTH_ROLES_HEADER`. The proxy must strip both headers from client requests. An admin API key is still accepted for local and break-glass access.
+- `/metrics` is unauthenticated. Expose it only on an internal network or protect it at the reverse proxy; do not publish it with the public chat UI.
 - Only upload documents that you are authorized to process and index.

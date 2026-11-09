@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
+from redis.exceptions import RedisError
 from uuid import UUID
 
 from app.api import routes
@@ -26,7 +27,7 @@ def test_get_conversation_returns_persisted_messages(monkeypatch):
     monkeypatch.setattr(
         routes,
         "load_conversation",
-        lambda requested_id: [
+        lambda requested_id, owner=None: [
             HumanMessage(content="How do I connect to VPN?"),
             AIMessage(content="Use the company VPN client."),
         ],
@@ -70,8 +71,8 @@ def test_chat_returns_answer_and_writes_audit(monkeypatch):
     }
     audit_writes = []
     conversation_saves = []
-    monkeypatch.setattr(routes, "load_conversation", lambda conversation_id: [])
-    monkeypatch.setattr(routes, "save_conversation", lambda conversation_id, messages: conversation_saves.append((conversation_id, messages)))
+    monkeypatch.setattr(routes, "load_conversation", lambda conversation_id, owner=None: [])
+    monkeypatch.setattr(routes, "save_conversation", lambda conversation_id, messages, owner=None: conversation_saves.append((conversation_id, messages)))
     monkeypatch.setattr(
         routes, "ask", lambda question, history, request_id="": result
     )
@@ -94,7 +95,7 @@ def test_chat_returns_answer_and_writes_audit(monkeypatch):
         "source_used": "private_kb",
         "trace": ["KB evidence grade → GOOD"],
         "citations": [{"title": "VPN guide", "url": "/vpn"}],
-        "rewritten_query": "connect to VPN",
+        "retrieval_query": "connect to VPN",
     }
     assert audit_writes == [
         ("How do I connect to VPN?", "private_kb", ["KB evidence grade → GOOD"])
@@ -113,7 +114,7 @@ def test_chat_restores_history_for_follow_up(monkeypatch):
         AIMessage(content="Use the company VPN client."),
     ]
     captured = {}
-    monkeypatch.setattr(routes, "load_conversation", lambda requested_id: history)
+    monkeypatch.setattr(routes, "load_conversation", lambda requested_id, owner=None: history)
     monkeypatch.setattr(
         routes,
         "ask",
@@ -167,8 +168,8 @@ def test_stream_returns_conversation_id_and_saves_turn(monkeypatch, caplog):
                 }
             )
 
-    monkeypatch.setattr(routes, "load_conversation", lambda requested_id: [])
-    monkeypatch.setattr(routes, "save_conversation", lambda key, messages: saved.append((key, messages)))
+    monkeypatch.setattr(routes, "load_conversation", lambda requested_id, owner=None: [])
+    monkeypatch.setattr(routes, "save_conversation", lambda key, messages, owner=None: saved.append((key, messages)))
     monkeypatch.setattr(routes, "write_audit", lambda *args: None)
     monkeypatch.setattr(routes, "agent_graph", FakeGraph())
 
@@ -215,11 +216,11 @@ def test_silent_stream_saves_user_message_without_empty_assistant(monkeypatch):
                 {"followup_guard": {"answer": "", "source_used": "direct"}},
             )
 
-    monkeypatch.setattr(routes, "load_conversation", lambda requested_id: history)
+    monkeypatch.setattr(routes, "load_conversation", lambda requested_id, owner=None: history)
     monkeypatch.setattr(
         routes,
         "save_conversation",
-        lambda key, messages: saved.append((key, messages)),
+        lambda key, messages, owner=None: saved.append((key, messages)),
     )
     monkeypatch.setattr(routes, "write_audit", lambda *args: None)
     monkeypatch.setattr(routes, "agent_graph", FakeGraph())
@@ -294,23 +295,12 @@ def test_ingest_saves_parses_chunks_and_indexes_document(monkeypatch, tmp_path):
     monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
     monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
     parsed_files = []
-    indexed_chunks = []
 
-    def fake_load_file(path: Path):
+    def fake_index_file(path: Path):
         parsed_files.append((path.name, path.read_bytes()))
-        return ["parsed document"]
+        return 1, ["vector-1"]
 
-    monkeypatch.setattr(routes, "load_file", fake_load_file)
-    monkeypatch.setattr(
-        routes,
-        "chunk_documents",
-        lambda documents: [f"{documents[0]} chunk"],
-    )
-    monkeypatch.setattr(
-        routes,
-        "replace_documents",
-        lambda chunks: indexed_chunks.extend(chunks) or ["vector-1"],
-    )
+    monkeypatch.setattr(routes, "index_file", fake_index_file)
 
     response = create_client().post(
         "/api/ingest",
@@ -326,19 +316,17 @@ def test_ingest_saves_parses_chunks_and_indexes_document(monkeypatch, tmp_path):
         "ids_created": 1,
     }
     assert parsed_files == [("vpn.md", b"VPN connection instructions")]
-    assert indexed_chunks == ["parsed document chunk"]
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_ingest_rejects_documents_without_indexable_text(monkeypatch, tmp_path):
     monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
     monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
-    monkeypatch.setattr(routes, "load_file", lambda path: [])
-    monkeypatch.setattr(routes, "chunk_documents", lambda documents: [])
 
-    def unexpected_replace(chunks):
-        raise AssertionError("Empty documents must not replace indexed content")
+    def empty_document(path):
+        raise routes.EmptyDocumentError("The uploaded document contains no indexable text")
 
-    monkeypatch.setattr(routes, "replace_documents", unexpected_replace)
+    monkeypatch.setattr(routes, "index_file", empty_document)
 
     response = create_client().post(
         "/api/ingest",
@@ -350,3 +338,138 @@ def test_ingest_rejects_documents_without_indexable_text(monkeypatch, tmp_path):
     assert response.json() == {
         "detail": "The uploaded document contains no indexable text"
     }
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ingest_rejects_oversized_upload_and_removes_partial_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
+    monkeypatch.setattr(routes.settings, "max_upload_bytes", 4)
+
+    response = create_client().post(
+        "/api/ingest",
+        headers={"x-admin-key": "test-secret"},
+        files={"file": ("vpn.md", b"12345", "text/markdown")},
+    )
+
+    assert response.status_code == 413
+    assert "upload limit" in response.json()["detail"]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ingest_queue_mode_returns_job_and_keeps_file_for_the_worker(monkeypatch, tmp_path):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
+    monkeypatch.setattr(routes.settings, "ingest_mode", "queue")
+    created = []
+
+    def fake_create_job(filename, path):
+        created.append((filename, path))
+        return "a" * 32
+
+    monkeypatch.setattr(routes, "create_job", fake_create_job)
+
+    response = create_client().post(
+        "/api/ingest",
+        headers={"x-admin-key": "test-secret"},
+        files={"file": ("vpn.md", b"VPN connection instructions", "text/markdown")},
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "job_id": "a" * 32,
+        "status": "queued",
+        "file": "vpn.md",
+    }
+    assert created == [("vpn.md", str(tmp_path / "vpn.md"))]
+    assert (tmp_path / "vpn.md").read_bytes() == b"VPN connection instructions"
+
+
+def test_ingest_queue_failure_removes_the_upload(monkeypatch, tmp_path):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
+    monkeypatch.setattr(routes.settings, "ingest_mode", "queue")
+
+    def broken_queue(filename, path):
+        raise RedisError("down")
+
+    monkeypatch.setattr(routes, "create_job", broken_queue)
+
+    response = create_client().post(
+        "/api/ingest",
+        headers={"x-admin-key": "test-secret"},
+        files={"file": ("vpn.md", b"VPN connection instructions", "text/markdown")},
+    )
+
+    assert response.status_code == 503
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ingest_job_returns_status_for_admins(monkeypatch):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    job = {
+        "job_id": "a" * 32,
+        "status": "done",
+        "file": "vpn.md",
+        "chunks": 3,
+        "ids_created": 3,
+        "error": "",
+    }
+    monkeypatch.setattr(routes, "get_job", lambda job_id: job)
+
+    response = create_client().get(
+        f"/api/ingest/jobs/{'a' * 32}", headers={"x-admin-key": "test-secret"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == job
+
+
+def test_ingest_job_requires_admin_key(monkeypatch):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+
+    response = create_client().get(f"/api/ingest/jobs/{'a' * 32}")
+
+    assert response.status_code == 401
+
+
+def test_ingest_job_returns_404_for_unknown_job(monkeypatch):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    monkeypatch.setattr(routes, "get_job", lambda job_id: None)
+
+    response = create_client().get(
+        f"/api/ingest/jobs/{'a' * 32}", headers={"x-admin-key": "test-secret"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_ready_reports_healthy_dependencies(monkeypatch):
+    class FakeRedis:
+        def ping(self):
+            return True
+
+    monkeypatch.setattr(routes, "get_redis_client", lambda: FakeRedis())
+    monkeypatch.setattr(routes, "get_bm25_index", lambda: [object()])
+
+    response = create_client().get("/api/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ready",
+        "checks": {"redis": "ok", "bm25": "ok"},
+    }
+
+
+def test_ready_returns_503_when_redis_is_down(monkeypatch):
+    class BrokenRedis:
+        def ping(self):
+            raise RuntimeError("down")
+
+    monkeypatch.setattr(routes, "get_redis_client", lambda: BrokenRedis())
+    monkeypatch.setattr(routes, "get_bm25_index", lambda: [])
+
+    response = create_client().get("/api/ready")
+
+    assert response.status_code == 503
+    assert response.json()["checks"] == {"redis": "unavailable", "bm25": "empty"}
