@@ -45,6 +45,17 @@ def current_user(request: Request) -> str | None:
     return user
 
 
+def require_ingestion_enabled() -> None:
+    enabled = (
+        settings.allow_ingestion
+        if settings.allow_ingestion is not None
+        else settings.app_env != "production"
+    )
+    if not enabled:
+        # Hide the endpoint instead of advertising a disabled capability.
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
 def rate_limit(
     request: Request, user: str | None = Depends(current_user)
 ) -> None:

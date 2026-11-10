@@ -284,6 +284,37 @@ def test_stats_returns_audit_summaries_with_admin_key(monkeypatch):
     }
 
 
+def test_ingestion_is_hidden_in_production_by_default(monkeypatch):
+    from app.api import deps
+
+    monkeypatch.setattr(deps.settings, "app_env", "production")
+    monkeypatch.setattr(deps.settings, "allow_ingestion", None)
+    client = create_client()
+
+    upload = client.post(
+        "/api/ingest",
+        files={"file": ("vpn.md", b"VPN guidance", "text/markdown")},
+    )
+    job = client.get(f"/api/ingest/jobs/{'a' * 32}")
+
+    assert upload.status_code == 404
+    assert job.status_code == 404
+
+
+def test_ingestion_can_be_enabled_in_production(monkeypatch):
+    from app.api import deps
+
+    monkeypatch.setattr(deps.settings, "app_env", "production")
+    monkeypatch.setattr(deps.settings, "allow_ingestion", True)
+
+    response = create_client().post(
+        "/api/ingest",
+        files={"file": ("vpn.md", b"VPN guidance", "text/markdown")},
+    )
+
+    assert response.status_code == 401
+
+
 def test_ingest_requires_admin_key(monkeypatch):
     monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
 

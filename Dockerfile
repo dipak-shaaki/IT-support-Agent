@@ -27,10 +27,20 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
 COPY --from=frontend-build /frontend/dist /app/frontend/dist
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH" \
+    FASTEMBED_CACHE_PATH=/app/.cache/fastembed
 
+# Bake the embedding model and keyword corpus into the image so a cold start
+# does not download or rebuild them. Keep in sync with EMBEDDING_MODEL.
+ARG EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('${EMBEDDING_MODEL}')"
+RUN python -m app.build_bm25
+
+# Only the writable paths need to change owner; chowning the whole image is
+# slow on large layers and is not required for read-only app files.
 RUN useradd --create-home --uid 10001 appuser \
-    && chown -R appuser:appuser /app
+    && mkdir -p /app/data /app/uploads \
+    && chown -R appuser:appuser /app/data /app/uploads /app/.cache/fastembed
 USER appuser
 
 EXPOSE 8080

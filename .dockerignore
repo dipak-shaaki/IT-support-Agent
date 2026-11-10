@@ -16,3 +16,10 @@ frontend/node_modules
 frontend/dist
 tests
 *.log
+code/
+code.zip
+docs/
+uploads/
+data/audit.db
+data/bm25_corpus.jsonl
+data/bm25_corpus.jsonl.tmp

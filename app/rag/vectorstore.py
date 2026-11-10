@@ -4,9 +4,9 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_core.documents import Document
 from pinecone import Pinecone , ServerlessSpec
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 
 from app.core.config import get_settings
@@ -59,10 +59,9 @@ def get_embedding_dimension(model_name: str | None = None) -> int:
 def get_embeddings():
     global _embeddings
     if _embeddings is None:
-        _embeddings = HuggingFaceEmbeddings(
-            model_name=settings.embedding_model,
-            encode_kwargs={"normalize_embeddings": True},
-        )
+        # FastEmbed runs the same MiniLM weights through ONNX, which keeps the
+        # deployment inside the memory limit of a small instance.
+        _embeddings = FastEmbedEmbeddings(model_name=settings.embedding_model)
     return _embeddings
 
 

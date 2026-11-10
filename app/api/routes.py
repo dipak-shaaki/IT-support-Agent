@@ -12,7 +12,12 @@ from redis.exceptions import RedisError
 
 from app.core.config import get_settings
 from app.core.metrics import CHAT_REQUESTS, INGEST_REQUESTS
-from app.api.deps import current_user, rate_limit, require_admin
+from app.api.deps import (
+    current_user,
+    rate_limit,
+    require_admin,
+    require_ingestion_enabled,
+)
 from app.api.schemas import (
     ChatDoneEvent,
     ChatRequest,
@@ -299,8 +304,9 @@ def chat_stream(
 
 @router.post("/ingest")
 async def ingest(
+    _: None = Depends(require_ingestion_enabled),
     file: UploadFile = File(...),
-    _: None = Depends(require_admin),
+    __: None = Depends(require_admin),
 ):
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in SUPPORTED:
@@ -356,7 +362,11 @@ async def ingest(
 
 
 @router.get("/ingest/jobs/{job_id}")
-def ingest_job(job_id: str, _: None = Depends(require_admin)):
+def ingest_job(
+    job_id: str,
+    _: None = Depends(require_ingestion_enabled),
+    __: None = Depends(require_admin),
+):
     try:
         job = get_job(job_id)
     except RedisError as exc:

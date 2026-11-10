@@ -224,7 +224,7 @@ Backend logs include the submitted question's character and `cl100k_base` token 
 | `TAVILY_API_KEY` | Tavily web-search credentials |
 | `PINECONE_API_KEY` | Pinecone credentials |
 | `PINECONE_INDEX_NAME`, `PINECONE_NAMESPACE` | Private vector index and namespace |
-| `EMBEDDING_MODEL` | Local sentence-transformers embedding model |
+| `EMBEDDING_MODEL` | Local FastEmbed/ONNX embedding model; defaults to `sentence-transformers/all-MiniLM-L6-v2` |
 | `TOP_K` | Number of hybrid private knowledge-base results to return; defaults to 5 |
 | `REDIS_URL` | Redis connection URL for conversation history |
 | `CONVERSATION_TTL_SECONDS` | Inactivity lifetime for a conversation; defaults to 86400 seconds |
@@ -240,6 +240,7 @@ Backend logs include the submitted question's character and `cl100k_base` token 
 | `INGEST_JOB_TTL_SECONDS` | How long queued job status is retained in Redis; defaults to 86400 seconds |
 | `INGEST_LEASE_SECONDS` | How long a worker may hold a running job before it is requeued; defaults to 300 seconds |
 | `INGEST_MAX_ATTEMPTS` | How many attempts a stalled job gets before it is marked failed; defaults to 3 |
+| `ALLOW_INGESTION` | Upload endpoints are enabled outside production and disabled in production; set `true` to opt in |
 
 At least one model API key is required. The default models are `openai/gpt-oss-120b` for Groq, `gemini-3.8-flash` for Gemini, and `gpt-5.4-mini` for OpenAI. Fallbacks apply to request failures before a streamed response starts; a stream that fails after sending tokens is not retried to avoid duplicating output.
 
@@ -249,11 +250,13 @@ and Vite's local API proxy. Any `VITE_*` setting is embedded in browser assets
 and is public; never put API keys or other secrets in frontend environment
 variables.
 
+For a small deployment such as a 512 MB Render instance, the embedding model runs through FastEmbed's ONNX runtime instead of torch. Ingestion is disabled when `APP_ENV=production`; index the corpus locally with `app.bulk_ingest` and deploy retrieval only. Set `ALLOW_INGESTION=true` only when you deliberately want uploads handled by the deployed app.
+
 For an agent-based LangSmith workspace, create the agent and environment first, then set `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`, `LANGSMITH_AGENT_ID`, and `LANGSMITH_AGENT_ENVIRONMENT` in `.env`. Use the agent's identifier (not its display name) and an existing environment such as `development`. Start commands with `uv run --env-file .env ...`. Traces may contain user prompts, retrieved documents, and model answers; enable tracing only with data approved for the configured LangSmith workspace.
 
 Additional paths such as `AUDIT_DB_PATH`, `BM25_INDEX_PATH`, `UPLOAD_DIR`, and `SAMPLE_KB_DIR` have defaults in `app/core/config.py`.
 
-The BM25 corpus is written to `data/bm25_corpus.jsonl` by ingestion. Documents indexed before hybrid retrieval was enabled must be ingested again to appear in keyword results. If the corpus is missing or empty, retrieval logs a warning and falls back to vector-only. In queue mode the corpus file must be on storage shared by the app and worker; the Compose setup uses a named volume, while a multi-host deployment needs a shared filesystem.
+The BM25 corpus is written to `data/bm25_corpus.jsonl` by ingestion. Documents indexed before hybrid retrieval was enabled must be ingested again to appear in keyword results. If the corpus is missing or empty, retrieval logs a warning and falls back to vector-only. In queue mode the corpus file must be on storage shared by the app and worker; the Compose setup uses a named volume, while a multi-host deployment needs a shared filesystem. The corpus is gitignored, so the Docker image regenerates it from `data/sample_kb` at build time with `python -m app.build_bm25`; it does not download documents or call an embedding model.
 
 ## Tests
 

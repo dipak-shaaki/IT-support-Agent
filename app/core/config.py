@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = Field(default=30, gt=0)
     llm_timeout_seconds: int = Field(default=60, gt=0)
     ingest_mode: Literal["inline", "queue"] = "inline"
+    # None means enabled outside production and disabled in production.
+    allow_ingestion: bool | None = None
     ingest_job_ttl_seconds: int = Field(default=86400, gt=0)
     ingest_lease_seconds: int = Field(default=300, gt=0)
     ingest_max_attempts: int = Field(default=3, ge=1)
