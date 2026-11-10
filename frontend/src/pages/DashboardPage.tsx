@@ -86,7 +86,7 @@ export function DashboardPage() {
   const sourceCounts = Object.fromEntries((stats?.sources ?? []).map(({ source, count }) => [source, count]))
   const kbAnswers = sourceCounts.private_kb ?? 0
   const webAnswers = sourceCounts.web_search ?? 0
-  const unanswered = sourceCounts.insufficient_evidence ?? 0
+  const unanswered = stats?.gaps_total ?? 0
   const total = stats?.total ?? 0
 
   return (

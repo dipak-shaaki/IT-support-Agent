@@ -133,7 +133,7 @@ Redis should respond with `PONG`. Make sure `.env` uses
 `REDIS_URL=redis://localhost:6379/0`. Run the backend in one terminal:
 
 ```bash
-uv run --env-file .env uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uv run --env-file .env uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 ```
 
 Start the React development server in another terminal:
@@ -146,26 +146,28 @@ npm run dev
 
 Open [http://127.0.0.1:5173](http://127.0.0.1:5173) for chat or
 [http://127.0.0.1:5173/dashboard](http://127.0.0.1:5173/dashboard) for the
-operations dashboard. Vite proxies `/api` requests to FastAPI on port 8000.
+operations dashboard. Vite proxies `/api` requests to FastAPI on port 8080.
 FastAPI's interactive API documentation remains at
-[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+[http://127.0.0.1:8080/docs](http://127.0.0.1:8080/docs). Port 8080 matches
+`run.py` and the Docker image and avoids clashing with tools that probe the
+common vLLM port 8000.
 
 To build and serve the frontend through FastAPI locally:
 
 ```bash
 cd frontend && npm ci && npm run build
 cd ..
-uv run --env-file .env uvicorn app.main:app --host 127.0.0.1 --port 8000
+uv run --env-file .env uvicorn app.main:app --host 127.0.0.1 --port 8080
 ```
 
-Then open `http://127.0.0.1:8000`. The Docker image builds the frontend and
+Then open `http://127.0.0.1:8080`. The Docker image builds the frontend and
 serves it from FastAPI automatically.
 
 ## API overview
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | Liveness check |
+| `GET` | `/api/health` | Liveness check (also available as `/health` for probes) |
 | `GET` | `/api/ready` | Readiness check for Redis and the keyword index |
 | `GET` | `/metrics` | Prometheus metrics for HTTP, chat, ingestion, and rate limiting |
 | `POST` | `/api/chat` | Ask a question and receive a complete response |
@@ -178,17 +180,26 @@ serves it from FastAPI automatically.
 Example request:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/chat \
+curl -X POST http://127.0.0.1:8080/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"question":"How do I connect to the company VPN?"}'
 ```
 
 To index a document, send a supported file to `/api/ingest` with the `x-admin-key` header set to `ADMIN_API_KEY`. The file is parsed, chunked, embedded, and stored in Pinecone; the local BM25 corpus is updated too. Uploading a revised file with the same filename replaces its previous indexed chunks. The statistics endpoint uses the same header. Uploaded files are deleted after they are indexed.
 
-With `INGEST_MODE=queue`, the endpoint stores the upload, returns HTTP 202 with a `job_id`, and a worker processes the file in the background; poll `/api/ingest/jobs/{job_id}` for `queued`, `running`, `done`, or `error`. Docker Compose sets this mode and runs the worker as a separate service. The app and worker share the `data` and `uploads` volumes, which is required for the worker's BM25 updates to reach the API process.
+To index a whole directory without the UI, run the bulk helper from the repository root. Use `--dry-run` first to parse and count chunks without calling Pinecone:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/ingest \
+uv run --env-file .env python -m app.bulk_ingest data/sample_kb --dry-run
+uv run --env-file .env python -m app.bulk_ingest data/sample_kb
+```
+
+Markdown files that use the `## IT-xxxxx` Q&A format are parsed as one chunk per record, so a question and its answer stay together. Record metadata (`record_id`, `question`, `category`, `record_number`, `document_type`, `language`) is stored in Pinecone and the BM25 corpus, and private-KB citations use the record ID. Other Markdown, PDF, text, and Word files use the generic section splitter.
+
+With `INGEST_MODE=queue`, the endpoint stores the upload, returns HTTP 202 with a `job_id`, and a worker processes the file in the background; poll `/api/ingest/jobs/{job_id}` for `queued`, `running`, `done`, or `error`. A running job carries a lease; if the worker dies, the job is requeued after `INGEST_LEASE_SECONDS` and marked failed after `INGEST_MAX_ATTEMPTS`. Docker Compose sets this mode and runs the worker as a separate service. The worker logs and retries with backoff while Redis is unavailable. The app and worker share the `data` and `uploads` volumes, which is required for the worker's BM25 updates to reach the API process.
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/ingest \
   -H 'x-admin-key: YOUR_ADMIN_API_KEY' \
   -F 'file=@data/sample_kb/service_desk_runbook.md'
 ```
@@ -227,6 +238,8 @@ Backend logs include the submitted question's character and `cl100k_base` token 
 | `LLM_TIMEOUT_SECONDS` | Per-request provider timeout; defaults to 60 seconds |
 | `INGEST_MODE` | `inline` (default) or `queue`; queue mode requires a running worker |
 | `INGEST_JOB_TTL_SECONDS` | How long queued job status is retained in Redis; defaults to 86400 seconds |
+| `INGEST_LEASE_SECONDS` | How long a worker may hold a running job before it is requeued; defaults to 300 seconds |
+| `INGEST_MAX_ATTEMPTS` | How many attempts a stalled job gets before it is marked failed; defaults to 3 |
 
 At least one model API key is required. The default models are `openai/gpt-oss-120b` for Groq, `gemini-3.8-flash` for Gemini, and `gpt-5.4-mini` for OpenAI. Fallbacks apply to request failures before a streamed response starts; a stream that fails after sending tokens is not retried to avoid duplicating output.
 

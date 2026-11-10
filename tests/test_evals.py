@@ -52,6 +52,26 @@ def test_evaluator_checks_source_tooling_citations_and_answer():
     assert all(evaluated["checks"].values())
 
 
+def test_evaluator_normalizes_typographic_punctuation():
+    case = {
+        "name": "device",
+        "expected_source": "private_kb",
+        "expected_tools": [],
+        "answer_must_include_any": ["don't have", "not documented"],
+    }
+    result = {
+        "source_used": "private_kb",
+        "trace": [],
+        "citations": [],
+        "messages": [],
+        "answer": "I don\u2019t have access to that detail.",
+    }
+
+    evaluated = evaluate_case(case, result)
+
+    assert evaluated["checks"]["answer_must_include_any"] is True
+
+
 def test_evaluator_calculates_source_level_retrieval_metrics():
     case = {
         "name": "vpn",

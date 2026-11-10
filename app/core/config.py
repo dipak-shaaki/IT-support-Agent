@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = Field(default=60, gt=0)
     ingest_mode: Literal["inline", "queue"] = "inline"
     ingest_job_ttl_seconds: int = Field(default=86400, gt=0)
+    ingest_lease_seconds: int = Field(default=300, gt=0)
+    ingest_max_attempts: int = Field(default=3, ge=1)
     audit_db_path: str = str(BASE_DIR / "data" / "audit.db")
     bm25_index_path: str = str(BASE_DIR / "data" / "bm25_corpus.jsonl")
     upload_dir: str = str(BASE_DIR / "uploads")

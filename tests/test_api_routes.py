@@ -22,6 +22,15 @@ def test_health_returns_service_name():
     assert response.json() == {"status": "ok", "service": routes.settings.app_name}
 
 
+def test_root_health_mirrors_api_health():
+    from app import main
+
+    response = TestClient(main.app).get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "service": routes.settings.app_name}
+
+
 def test_get_conversation_returns_persisted_messages(monkeypatch):
     conversation_id = UUID("f0bb9e7a-7205-49c2-9daf-d4bcbe117c1a")
     monkeypatch.setattr(
@@ -79,7 +88,9 @@ def test_chat_returns_answer_and_writes_audit(monkeypatch):
     monkeypatch.setattr(
         routes,
         "write_audit",
-        lambda question, source, trace: audit_writes.append((question, source, trace)),
+        lambda question, source, trace, answer="": audit_writes.append(
+            (question, source, trace, answer)
+        ),
     )
 
     response = create_client().post(
@@ -98,7 +109,12 @@ def test_chat_returns_answer_and_writes_audit(monkeypatch):
         "retrieval_query": "connect to VPN",
     }
     assert audit_writes == [
-        ("How do I connect to VPN?", "private_kb", ["KB evidence grade → GOOD"])
+        (
+            "How do I connect to VPN?",
+            "private_kb",
+            ["KB evidence grade → GOOD"],
+            "Use the VPN client.",
+        )
     ]
     assert len(conversation_saves) == 1
     assert conversation_saves[0][1] == [
@@ -197,7 +213,7 @@ def test_stream_returns_conversation_id_and_saves_turn(monkeypatch, caplog):
     assert "Chat stream completed" in caplog.text
 
 
-def test_silent_stream_saves_user_message_without_empty_assistant(monkeypatch):
+def test_stream_without_answer_saves_only_the_user_message(monkeypatch):
     conversation_id = UUID("f0bb9e7a-7205-49c2-9daf-d4bcbe117c1a")
     history = [
         HumanMessage(content="yes"),
@@ -252,6 +268,7 @@ def test_stats_returns_audit_summaries_with_admin_key(monkeypatch):
     monkeypatch.setattr(routes, "source_breakdown", lambda: [{"source": "private_kb", "count": 2}])
     monkeypatch.setattr(routes, "daily_counts", lambda: [{"day": "2026-10-29", "count": 2}])
     monkeypatch.setattr(routes, "kb_gaps", lambda: [])
+    monkeypatch.setattr(routes, "gap_total", lambda: 3)
     monkeypatch.setattr(routes, "recent_queries", lambda: [])
 
     response = create_client().get("/api/stats", headers={"x-admin-key": "test-secret"})
@@ -262,6 +279,7 @@ def test_stats_returns_audit_summaries_with_admin_key(monkeypatch):
         "sources": [{"source": "private_kb", "count": 2}],
         "daily": [{"day": "2026-10-29", "count": 2}],
         "gaps": [],
+        "gaps_total": 3,
         "recent": [],
     }
 

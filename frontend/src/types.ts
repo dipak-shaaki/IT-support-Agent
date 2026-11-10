@@ -35,6 +35,7 @@ export type DashboardStats = {
   sources: SourceCount[]
   daily: DailyCount[]
   gaps: KnowledgeGap[]
+  gaps_total: number
   recent: RecentQuery[]
 }
 

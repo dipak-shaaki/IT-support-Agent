@@ -1,6 +1,7 @@
 import logging
 import secrets
 import time
+from uuid import uuid4
 
 from fastapi import Depends, Header, HTTPException, Request
 from redis.exceptions import RedisError
@@ -44,20 +45,26 @@ def current_user(request: Request) -> str | None:
     return user
 
 
-def rate_limit(user: str | None = Depends(current_user)) -> None:
-    # shortcut: fixed one-minute window; move to a sliding window if bursts matter
-    identity = user or "anonymous"
-    key = f"ratelimit:{identity}:{int(time.time() // 60)}"
+def rate_limit(
+    request: Request, user: str | None = Depends(current_user)
+) -> None:
+    # Without proxy auth, fall back to the caller's IP so one client cannot
+    # exhaust a bucket shared by everyone.
+    identity = user or getattr(request.client, "host", None) or "anonymous"
+    key = f"ratelimit:{identity}"
+    now = time.time()
     try:
         client = get_redis_client()
-        count = client.incr(key)
-        if count == 1:
-            client.expire(key, 60)
+        client.zremrangebyscore(key, 0, now - 60)
+        count = client.zcard(key)
+        if count < settings.rate_limit_per_minute:
+            client.zadd(key, {f"{now}:{uuid4().hex}": now})
+            client.expire(key, 61)
     except RedisError:
         # Fail open: a Redis outage must not take chat down with it.
         logger.warning("Rate limiter unavailable; allowing request", exc_info=True)
         return
-    if count > settings.rate_limit_per_minute:
+    if count >= settings.rate_limit_per_minute:
         RATE_LIMITED.inc()
         raise HTTPException(
             status_code=429,

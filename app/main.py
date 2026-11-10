@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from app.api.routes import router
+from app.api.routes import health, router
 from app.core.config import get_settings, BASE_DIR
 from app.core.logging import configure_logging
 from app.core.metrics import HTTP_DURATION, HTTP_REQUESTS
@@ -91,6 +91,12 @@ def _record_request(request: Request, status: int, duration: float) -> None:
 @app.get("/metrics")
 def metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+# Probes often check /health; mirror /api/health at the root.
+@app.get("/health")
+def health_alias():
+    return health()
 
 
 app.include_router(router)

@@ -6,10 +6,11 @@ from starlette.requests import Request
 from app.api import deps
 
 
-def make_request(**headers) -> Request:
+def make_request(client=("127.0.0.1", 1234), **headers) -> Request:
     return Request(
         {
             "type": "http",
+            "client": client,
             "headers": [
                 (key.lower().encode(), value.encode()) for key, value in headers.items()
             ],
@@ -19,12 +20,21 @@ def make_request(**headers) -> Request:
 
 class FakeRedis:
     def __init__(self):
-        self.counts = {}
+        self.zsets = {}
         self.expiry = {}
 
-    def incr(self, key):
-        self.counts[key] = self.counts.get(key, 0) + 1
-        return self.counts[key]
+    def zremrangebyscore(self, key, low, high):
+        self.zsets[key] = {
+            member: score
+            for member, score in self.zsets.get(key, {}).items()
+            if score > high
+        }
+
+    def zcard(self, key):
+        return len(self.zsets.get(key, {}))
+
+    def zadd(self, key, mapping):
+        self.zsets.setdefault(key, {}).update(mapping)
 
     def expire(self, key, seconds):
         self.expiry[key] = seconds
@@ -59,24 +69,48 @@ def test_rate_limit_rejects_requests_over_the_window(monkeypatch):
     monkeypatch.setattr(deps, "get_redis_client", lambda: client)
     monkeypatch.setattr(deps.settings, "rate_limit_per_minute", 2)
 
-    deps.rate_limit("alice")
-    deps.rate_limit("alice")
+    deps.rate_limit(make_request(), "alice")
+    deps.rate_limit(make_request(), "alice")
     with pytest.raises(HTTPException) as error:
-        deps.rate_limit("alice")
+        deps.rate_limit(make_request(), "alice")
 
     assert error.value.status_code == 429
     assert error.value.headers == {"Retry-After": "60"}
 
 
+def test_rate_limit_separates_anonymous_callers_by_ip(monkeypatch):
+    client = FakeRedis()
+    monkeypatch.setattr(deps, "get_redis_client", lambda: client)
+    monkeypatch.setattr(deps.settings, "rate_limit_per_minute", 1)
+
+    deps.rate_limit(make_request(client=("10.0.0.1", 1000)), None)
+    deps.rate_limit(make_request(client=("10.0.0.2", 1000)), None)
+
+    with pytest.raises(HTTPException):
+        deps.rate_limit(make_request(client=("10.0.0.1", 1000)), None)
+
+
+def test_rate_limit_forgets_requests_outside_the_window(monkeypatch):
+    client = FakeRedis()
+    monkeypatch.setattr(deps, "get_redis_client", lambda: client)
+    monkeypatch.setattr(deps.settings, "rate_limit_per_minute", 1)
+
+    deps.rate_limit(make_request(), "alice")
+    for key in client.zsets:
+        client.zsets[key] = {member: 0 for member in client.zsets[key]}
+
+    deps.rate_limit(make_request(), "alice")
+
+
 def test_rate_limit_fails_open_when_redis_is_unavailable(monkeypatch):
     class BrokenRedis:
-        def incr(self, key):
+        def zremrangebyscore(self, key, low, high):
             raise RedisError("down")
 
     monkeypatch.setattr(deps, "get_redis_client", lambda: BrokenRedis())
     monkeypatch.setattr(deps.settings, "rate_limit_per_minute", 1)
 
-    deps.rate_limit("alice")
+    deps.rate_limit(make_request(), "alice")
 
 
 def test_require_admin_accepts_the_configured_key(monkeypatch):

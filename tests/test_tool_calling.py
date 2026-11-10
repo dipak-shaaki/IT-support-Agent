@@ -306,6 +306,15 @@ def test_system_prompt_protects_instructions_across_requested_formats():
     assert "never search the public web" in prompt
 
 
+def test_system_prompt_allows_informational_it_and_security_questions():
+    prompt = agent_prompts.SYSTEM_PROMPT
+
+    assert "related to IT or security" in prompt
+    assert "definitions,\n  concepts, causes, and examples" in prompt
+    assert '"What is phishing?"' in prompt
+    assert "general trivia unrelated to IT" in prompt
+
+
 def test_non_outage_queries_never_get_web_tool(monkeypatch):
     model = FakeModel(
         [
@@ -460,6 +469,7 @@ def test_external_company_policy_does_not_trigger_web_search(monkeypatch):
     [
         "What is our company work policy?",
         "What is Apple's work policy for my account?",
+        "What priority is a company-wide outage or critical security incident?",
     ],
 )
 def test_non_outage_questions_never_require_web_search(question):
@@ -569,3 +579,77 @@ def test_web_tool_call_before_private_search_is_rejected(monkeypatch):
 
     with pytest.raises(ValueError, match="requested unavailable tools: search_web"):
         agent_nodes.execute_tools(state)
+
+
+def test_private_kb_citation_uses_the_record_id(monkeypatch):
+    class RecordRetriever:
+        def invoke(self, query):
+            assert query == "connect to VPN"
+            return [
+                Document(
+                    page_content="What is a VPN?\n\nA private company network.",
+                    metadata={
+                        "source": "it_support_01.md",
+                        "record_id": "IT-00001",
+                    },
+                )
+            ]
+
+    model = FakeModel(
+        [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "search_private_kb",
+                        "args": {"query": "connect to VPN"},
+                        "id": "kb-call",
+                        "type": "tool_call",
+                    }
+                ],
+            ),
+            AIMessage(content="Use the company VPN."),
+        ]
+    )
+    monkeypatch.setattr(agent_model, "llm", lambda: model)
+    monkeypatch.setattr(agent_tools, "get_retriever", lambda: RecordRetriever())
+
+    result = agent_graph.ask("How do I connect to VPN?")
+
+    assert result["citations"] == [
+        {"title": "IT-00001", "url": "", "type": "private_kb"}
+    ]
+
+
+def test_finalize_uses_the_configured_fallback_providers(monkeypatch):
+    captured = {}
+    primary = object()
+    fallback = object()
+
+    def fake_invoke(models, messages, request_id=""):
+        captured["models"] = models
+        return AIMessage(content="Final answer from the fallback provider.")
+
+    monkeypatch.setattr(agent_model, "llm", lambda: primary)
+    monkeypatch.setattr(agent_model, "fallback_llms", lambda: [fallback])
+    monkeypatch.setattr(agent_model, "invoke_with_fallbacks", fake_invoke)
+
+    state = agent_graph.initial_state("How do I connect to VPN?")
+    state["messages"].append(
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "search_web",
+                    "args": {"query": "VPN"},
+                    "id": "web-call",
+                    "type": "tool_call",
+                }
+            ],
+        )
+    )
+
+    result = agent_nodes.finalize(state)
+
+    assert captured["models"] == [primary, fallback]
+    assert result["answer"] == "Final answer from the fallback provider."

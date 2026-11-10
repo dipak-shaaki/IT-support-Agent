@@ -13,6 +13,7 @@ CURRENT_STATUS_PATTERN = re.compile(
     r"|any (?:current )?outages?"
     r"|is there an? (?:current )?outage"
     r"|(?:has|have|was|were) there .{0,20}outages?"
+    r"|(?:latest|current|recent|ongoing|active) .{0,30}outages?"
     r"|service status|status page|service health|currently unavailable"
     r"|having issues right now|service disruption"
     r")",

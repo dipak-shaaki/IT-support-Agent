@@ -14,6 +14,10 @@ from app.agent.tools import search_private_kb, search_web
 logger = logging.getLogger(__name__)
 
 MAX_TOOL_CALLS = 6
+REPETITIVE_FOLLOWUP_ANSWER = (
+    "I don't have another question to ask. If you describe the issue or the error "
+    "you're seeing, I'll help you troubleshoot it."
+)
 
 
 def available_tools(state: AgentState) -> list:
@@ -37,7 +41,7 @@ def route_initial_state(state: AgentState) -> Literal["agent", "followup_guard"]
 
 def stop_repetitive_followup(state: AgentState):
     return {
-        "answer": "",
+        "answer": REPETITIVE_FOLLOWUP_ANSWER,
         "source_used": "direct",
     }
 
@@ -167,7 +171,8 @@ def execute_tools(state: AgentState):
             for document in documents:
                 source = document.get("source", "Private KB")
                 citation = {
-                    "title": source.rsplit("/", 1)[-1],
+                    "title": document.get("record_id")
+                    or source.rsplit("/", 1)[-1],
                     "url": "",
                     "type": "private_kb",
                 }
@@ -224,12 +229,17 @@ def finalize(state: AgentState):
             answer = ""
             writer = get_stream_writer()
             response = model.stream_with_fallbacks(
-                [model.llm()], prompt, writer, state["request_id"]
+                [model.llm(), *model.fallback_llms()],
+                prompt,
+                writer,
+                state["request_id"],
             )
             answer = model.content_text(response.content).strip()
         else:
             answer_message = model.invoke_with_fallbacks(
-                [model.llm()], prompt, state["request_id"]
+                [model.llm(), *model.fallback_llms()],
+                prompt,
+                state["request_id"],
             )
             answer = model.content_text(answer_message.content).strip()
         trace.append(

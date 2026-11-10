@@ -30,18 +30,16 @@ def web_search_provider():
 def search_private_kb(query: str) -> str:
     """Search the company's private IT knowledge base for policies and support guidance."""
     documents = get_retriever().invoke(query)
-    return json.dumps(
-        {
-            "documents": [
-                {
-                    "source": document.metadata.get("source", "Private KB"),
-                    "content": document.page_content,
-                }
-                for document in documents
-            ]
-        },
-        ensure_ascii=False,
-    )
+    payload = []
+    for document in documents:
+        item = {
+            "source": document.metadata.get("source", "Private KB"),
+            "content": document.page_content,
+        }
+        if document.metadata.get("record_id"):
+            item["record_id"] = document.metadata["record_id"]
+        payload.append(item)
+    return json.dumps({"documents": payload}, ensure_ascii=False)
 
 
 @tool

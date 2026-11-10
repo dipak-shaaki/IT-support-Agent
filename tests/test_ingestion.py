@@ -55,3 +55,85 @@ def test_chunk_documents_preserves_source_metadata():
     assert len(chunks) > 1
     assert all(chunk.metadata["source"] == "vpn.md" for chunk in chunks)
     assert all("start_index" in chunk.metadata for chunk in chunks)
+
+
+def test_chunk_documents_keeps_a_runbook_section_together():
+    source = Document(
+        page_content=(
+            "## Email Troubleshooting\n"
+            + "email guidance " * 60
+            + "confirm whether the issue affects one user or many users. "
+            + "whether sending, receiving, or both are affected.\n\n"
+            "## Laptop Performance\n"
+            + "laptop guidance " * 60
+        ),
+        metadata={"source": "runbook.md"},
+    )
+
+    chunks = chunk_documents([source])
+    combined = [chunk.page_content for chunk in chunks]
+
+    assert any(
+        "one user or many users" in text and "sending, receiving, or both" in text
+        for text in combined
+    )
+
+
+def test_loads_markdown_qa_records_with_metadata(tmp_path: Path):
+    source = tmp_path / "it_support_01.md"
+    source.write_text(
+        "---\n"
+        'source: "IT Support Dataset"\n'
+        'category: "IT Support"\n'
+        "---\n\n"
+        "# IT Support Knowledge Base\n\n"
+        "## IT-00001\n\n"
+        "### Metadata\n\n"
+        "- id: IT-00001\n"
+        "- source: IT Support Dataset\n"
+        "- category: IT Support\n"
+        "- file: it_support_01.md\n"
+        "- record_number: 1\n"
+        "- document_type: question_answer\n"
+        "- language: en\n\n"
+        "### Question\n\nWhat is a VPN?\n\n"
+        "### Answer\n\nA private company network.\n\n---\n\n"
+        "## IT-00002\n\n"
+        "### Metadata\n\n"
+        "- id: IT-00002\n"
+        "- record_number: 2\n\n"
+        "### Question\n\nWhat is MFA?\n\n"
+        "### Answer\n\nA second sign-in factor.\n\n---\n",
+        encoding="utf-8",
+    )
+
+    documents = load_file(source)
+
+    assert len(documents) == 2
+    first = documents[0]
+    assert first.metadata["record_id"] == "IT-00001"
+    assert first.metadata["source"] == str(source)
+    assert first.metadata["category"] == "IT Support"
+    assert first.metadata["record_number"] == 1
+    assert first.metadata["question"] == "What is a VPN?"
+    assert first.page_content == "What is a VPN?\n\nA private company network."
+
+    chunks = chunk_documents(documents)
+
+    assert len(chunks) == 2
+    assert {chunk.metadata["record_id"] for chunk in chunks} == {
+        "IT-00001",
+        "IT-00002",
+    }
+    assert chunks[0].metadata["start_index"] != chunks[1].metadata["start_index"]
+
+
+def test_plain_markdown_still_uses_the_text_loader(tmp_path: Path):
+    source = tmp_path / "policy.md"
+    source.write_text("# VPN\n\nUse the VPN client.", encoding="utf-8")
+
+    documents = load_file(source)
+
+    assert len(documents) == 1
+    assert documents[0].metadata["source"] == str(source)
+    assert "Use the VPN client." in documents[0].page_content

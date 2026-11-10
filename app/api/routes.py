@@ -33,6 +33,7 @@ from app.services.audit import (
     write_audit,
     source_breakdown,
     kb_gaps,
+    gap_total,
     daily_counts,
     recent_queries,
 )
@@ -102,6 +103,7 @@ def stats(_: None = Depends(require_admin)):
         "sources": sources,
         "daily": daily_counts(),
         "gaps": kb_gaps(),
+        "gaps_total": gap_total(),
         "recent": recent_queries(),
     }
 
@@ -125,12 +127,18 @@ def chat(
         result = ask(
             payload.question, history, request_id=str(conversation_id)
         )
-        write_audit(payload.question, result["source_used"], result.get("trace", []))
-        save_conversation(
-            conversation_id,
-            append_turn(history, payload.question, result["answer"]),
-            user,
+        write_audit(
+            payload.question,
+            result["source_used"],
+            result.get("trace", []),
+            result["answer"],
         )
+        saved_messages = (
+            append_turn(history, payload.question, result["answer"])
+            if result["answer"]
+            else [*history, HumanMessage(content=payload.question)]
+        )
+        save_conversation(conversation_id, saved_messages, user)
         logger.info(
             "Chat request completed conversation_id=%s source=%s duration_ms=%d",
             conversation_id,
@@ -215,7 +223,12 @@ def chat_stream(
                         yield _sse({"type": "trace", "node": node, "text": line})
                     emitted = len(trace_lines)
 
-            write_audit(payload.question, state["source_used"], state.get("trace", []))
+            write_audit(
+                payload.question,
+                state["source_used"],
+                state.get("trace", []),
+                state["answer"],
+            )
             saved_messages = (
                 append_turn(history, payload.question, state["answer"])
                 if state["answer"]
@@ -269,7 +282,12 @@ def chat_stream(
                 )
             # client may disconnect mid-stream; keep the audit trail either way
             if not audited and state.get("answer"):
-                write_audit(payload.question, state.get("source_used", ""), state.get("trace", []))
+                write_audit(
+                    payload.question,
+                    state.get("source_used", ""),
+                    state.get("trace", []),
+                    state["answer"],
+                )
 
     return StreamingResponse(
         events(),

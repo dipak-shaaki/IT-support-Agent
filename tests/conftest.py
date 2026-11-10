@@ -5,11 +5,20 @@ from app.api import deps
 
 class FakeRedis:
     def __init__(self):
-        self.counts = {}
+        self.zsets = {}
 
-    def incr(self, key):
-        self.counts[key] = self.counts.get(key, 0) + 1
-        return self.counts[key]
+    def zremrangebyscore(self, key, low, high):
+        self.zsets[key] = {
+            member: score
+            for member, score in self.zsets.get(key, {}).items()
+            if score > high
+        }
+
+    def zcard(self, key):
+        return len(self.zsets.get(key, {}))
+
+    def zadd(self, key, mapping):
+        self.zsets.setdefault(key, {}).update(mapping)
 
     def expire(self, key, seconds):
         pass

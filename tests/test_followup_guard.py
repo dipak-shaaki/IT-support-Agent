@@ -25,7 +25,7 @@ def test_third_consecutive_acknowledgment_uses_normal_graph(monkeypatch):
     assert result["answer"] == "A normal reply."
 
 
-def test_fourth_consecutive_acknowledgment_is_silent_and_skips_model(monkeypatch):
+def test_fourth_consecutive_acknowledgment_returns_a_prompt_and_skips_model(monkeypatch):
     history = [
         HumanMessage(content="yes"),
         AIMessage(content="Can you share the error?"),
@@ -36,7 +36,7 @@ def test_fourth_consecutive_acknowledgment_is_silent_and_skips_model(monkeypatch
     ]
 
     def unexpected_model_call(_state):
-        raise AssertionError("The graph should silence repeated acknowledgments")
+        raise AssertionError("The graph should not call the model for repeated acknowledgments")
 
     monkeypatch.setattr(nodes, "call_agent", unexpected_model_call)
     graph = agent_graph.build_graph()
@@ -44,7 +44,7 @@ def test_fourth_consecutive_acknowledgment_is_silent_and_skips_model(monkeypatch
     result = graph.invoke(agent_graph.initial_state("yeah", history))
 
     assert result["repetitive_followup"] is True
-    assert result["answer"] == ""
+    assert result["answer"] == nodes.REPETITIVE_FOLLOWUP_ANSWER
     assert result["source_used"] == "direct"
     assert result["trace"] == []
 

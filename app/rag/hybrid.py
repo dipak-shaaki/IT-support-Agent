@@ -27,6 +27,19 @@ def chunk_key(document: Document) -> str:
     return f"{source}#{digest}"
 
 
+def dedupe_by_content(documents: list[Document]) -> list[Document]:
+    """Drop repeated chunks, e.g. the same file indexed under two paths."""
+    seen: set[str] = set()
+    unique: list[Document] = []
+    for document in documents:
+        digest = hashlib.sha1(document.page_content.encode("utf-8")).hexdigest()
+        if digest in seen:
+            continue
+        seen.add(digest)
+        unique.append(document)
+    return unique
+
+
 def reciprocal_rank_fusion(rankings: list[list[Document]], rrf_k: int = RRF_K) -> list[Document]:
     scores: dict[str, float] = {}
     documents: dict[str, Document] = {}
@@ -144,10 +157,12 @@ class HybridRetriever:
         self.candidate_k = max(top_k * 2, 10)
 
     def invoke(self, query: str) -> list[Document]:
-        vector_documents = self.vector_retriever.invoke(query)
+        vector_documents = dedupe_by_content(self.vector_retriever.invoke(query))
         if len(self.bm25_index) == 0:
             logger.warning("BM25 index is empty; using vector-only retrieval")
-            return list(vector_documents)[: self.top_k]
-        bm25_documents = self.bm25_index.search(query, self.candidate_k)
+            return vector_documents[: self.top_k]
+        bm25_documents = dedupe_by_content(
+            self.bm25_index.search(query, self.candidate_k)
+        )
         fused = reciprocal_rank_fusion([vector_documents, bm25_documents])
-        return fused[: self.top_k]
+        return dedupe_by_content(fused)[: self.top_k]

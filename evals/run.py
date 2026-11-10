@@ -126,11 +126,26 @@ def _retrieval_scores(
     }
 
 
+def _normalize(text: str) -> str:
+    # Match expected phrases regardless of typographic quotes/dashes from models.
+    return text.translate(
+        str.maketrans({
+            "\u2018": "'",
+            "\u2019": "'",
+            "\u201c": '"',
+            "\u201d": '"',
+            "\u2013": "-",
+            "\u2014": "-",
+            "\u00a0": " ",
+        })
+    ).casefold()
+
+
 def evaluate_case(case: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
     tools = _called_tools(result)
-    answer = result.get("answer", "").casefold()
+    answer = _normalize(result.get("answer", ""))
     documents = _retrieved_documents(result)
-    evidence = "\n".join(document["content"] for document in documents).casefold()
+    evidence = _normalize("\n".join(document["content"] for document in documents))
     citation_types = {citation.get("type") for citation in result.get("citations", [])}
     retrieval_scores = None
     expected_sources = case.get("expected_relevant_sources")
@@ -156,16 +171,16 @@ def evaluate_case(case: dict[str, Any], result: dict[str, Any]) -> dict[str, Any
             or case["required_citation_type"] in citation_types
         ),
         "evidence_must_include": all(
-            phrase.casefold() in evidence
+            _normalize(phrase) in evidence
             for phrase in case.get("evidence_must_include", [])
         ),
         "answer_must_include": all(
-            phrase.casefold() in answer for phrase in case.get("answer_must_include", [])
+            _normalize(phrase) in answer for phrase in case.get("answer_must_include", [])
         ),
         "answer_must_include_any": (
             not case.get("answer_must_include_any")
             or any(
-                phrase.casefold() in answer
+                _normalize(phrase) in answer
                 for phrase in case["answer_must_include_any"]
             )
         ),

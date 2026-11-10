@@ -116,6 +116,29 @@ def test_hybrid_retriever_fuses_and_caps_results(tmp_path: Path):
     assert results[0].page_content == "VPN password reset"
 
 
+def test_hybrid_retriever_dedupes_identical_chunks(tmp_path: Path):
+    index = Bm25Index(tmp_path / "bm25_corpus.jsonl")
+    index.add(
+        [
+            make_document("VPN password reset", start_index=0, source="a.md"),
+            make_document("Printer toner replacement", start_index=900, source="a.md"),
+        ]
+    )
+    vector = FakeVectorRetriever(
+        [
+            make_document("VPN password reset", start_index=0, source="a.md"),
+            make_document("VPN password reset", start_index=0, source="b.md"),
+            make_document("Printer toner replacement", start_index=900, source="a.md"),
+        ]
+    )
+
+    results = HybridRetriever(vector, index, top_k=3).invoke("vpn password reset")
+
+    contents = [document.page_content for document in results]
+    assert contents.count("VPN password reset") == 1
+    assert len(results) == 2
+
+
 def test_hybrid_retriever_degrades_to_vector_when_bm25_is_empty(tmp_path: Path):
     vector_documents = [make_document("first"), make_document("second")]
     retriever = HybridRetriever(
