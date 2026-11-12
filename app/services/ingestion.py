@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 from typing import Iterable
 
@@ -18,13 +17,6 @@ CHUNK_OVERLAP = 150
 RECORD_CHUNK_SIZE = 2500
 RECORD_CHUNK_OVERLAP = 200
 
-RECORD_HEADING = re.compile(r"^## (IT-\d+)[ \t]*$", re.M)
-METADATA_LINE = re.compile(r"^- ([A-Za-z_]+):[ \t]*(.*?)[ \t]*$", re.M)
-QUESTION_SECTION = re.compile(r"### Question[ \t]*\n+(.*?)\n+### Answer", re.S)
-ANSWER_SECTION = re.compile(r"### Answer[ \t]*\n+(.*)$", re.S)
-TRAILING_RULE = re.compile(r"\n+-{3,}[ \t\r\n]*$")
-
-
 class EmptyDocumentError(ValueError):
     """Raised when an upload has nothing that can be indexed."""
 
@@ -35,37 +27,55 @@ def load_markdown_records(path: Path) -> list[Document]:
     The source file keeps the file path in ``source`` so replacement and the
     BM25 index still group all records from the same document.
     """
-    text = path.read_text(encoding="utf-8")
-    headings = list(RECORD_HEADING.finditer(text))
+    lines = path.read_text(encoding="utf-8").splitlines()
+    line_offsets = []
+    offset = 0
+    for line in lines:
+        line_offsets.append(offset)
+        offset += len(line) + 1
+    headings = [
+        (line_number, record_id)
+        for line_number, line in enumerate(lines)
+        if (record_id := _record_id(line)) is not None
+    ]
     if not headings:
         return []
 
     documents = []
-    for index, heading in enumerate(headings):
-        end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
-        block = text[heading.start():end]
-        question_match = QUESTION_SECTION.search(block)
-        answer_match = ANSWER_SECTION.search(block)
-        if not question_match or not answer_match:
+    for index, (start, record_id) in enumerate(headings):
+        end = headings[index + 1][0] if index + 1 < len(headings) else len(lines)
+        block = lines[start:end]
+        question_header = _section_line(block, "### Question")
+        if question_header is None:
+            continue
+        answer_header = _section_line(block, "### Answer", question_header + 1)
+        if answer_header is None:
             continue
 
-        question = question_match.group(1).strip()
-        answer = TRAILING_RULE.sub("", answer_match.group(1)).strip()
+        question = "\n".join(block[question_header + 1:answer_header]).strip()
+        answer_lines = block[answer_header + 1:]
+        while answer_lines and not answer_lines[-1].strip():
+            answer_lines.pop()
+        if answer_lines:
+            final_line = answer_lines[-1].strip()
+            if len(final_line) >= 3 and set(final_line) == {"-"}:
+                answer_lines.pop()
+        answer = "\n".join(answer_lines).strip()
         if not question or not answer:
             continue
 
-        meta = dict(METADATA_LINE.findall(block))
+        meta = _metadata_from_lines(block)
         record_number = meta.get("record_number", "")
         metadata = {
             "source": str(path),
-            "record_id": meta.get("id") or heading.group(1),
+            "record_id": meta.get("id") or record_id,
             "question": question,
             "dataset_source": meta.get("source", ""),
             "category": meta.get("category", ""),
             "file": meta.get("file", path.name),
             "document_type": meta.get("document_type", ""),
             "language": meta.get("language", ""),
-            "start_index": heading.start(),
+            "start_index": line_offsets[start],
         }
         if record_number.isdigit():
             metadata["record_number"] = int(record_number)
@@ -73,6 +83,37 @@ def load_markdown_records(path: Path) -> list[Document]:
             Document(page_content=f"{question}\n\n{answer}", metadata=metadata)
         )
     return documents
+
+
+def _record_id(line: str) -> str | None:
+    if not line.startswith("## IT-"):
+        return None
+    suffix = line[6:].rstrip(" \t")
+    if suffix and all(character.isdigit() for character in suffix):
+        return f"IT-{suffix}"
+    return None
+
+
+def _section_line(lines: list[str], marker: str, start: int = 0) -> int | None:
+    return next(
+        (index for index in range(start, len(lines)) if lines[index].strip() == marker),
+        None,
+    )
+
+
+def _metadata_from_lines(lines: list[str]) -> dict[str, str]:
+    metadata = {}
+    for line in lines:
+        if not line.startswith("- "):
+            continue
+        key, separator, value = line[2:].partition(":")
+        if (
+            separator
+            and key
+            and all(character.isascii() and (character.isalpha() or character == "_") for character in key)
+        ):
+            metadata[key] = value.strip(" \t")
+    return metadata
 
 
 def load_file(path: Path) -> list[Document]:
