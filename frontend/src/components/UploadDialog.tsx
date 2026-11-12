@@ -2,8 +2,8 @@ import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { CheckCircle2, FileUp, LoaderCircle, LockKeyhole, X } from 'lucide-react'
 import { getIngestJob, ingestDocument } from '../api/client'
+import { readAdminKey, saveAdminKey } from '../api/browserStorage'
 
-const ADMIN_KEY_STORAGE = 'it_copilot_admin_key'
 const JOB_POLL_INTERVAL_MS = 2000
 const JOB_POLL_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -19,7 +19,7 @@ async function waitForJob(jobId: string, adminKey: string) {
 
 export function UploadDialog({ onClose }: { onClose: () => void }) {
   const fileInput = useRef<HTMLInputElement>(null)
-  const [adminKey, setAdminKey] = useState(() => sessionStorage.getItem(ADMIN_KEY_STORAGE) ?? '')
+  const [adminKey, setAdminKey] = useState(readAdminKey)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'success' | 'error' | 'info'; text: string } | null>(null)
 
@@ -37,7 +37,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
 
     setBusy(true)
     setStatus(null)
-    sessionStorage.setItem(ADMIN_KEY_STORAGE, adminKey.trim())
+    saveAdminKey(adminKey)
     try {
       const result = await ingestDocument(file, adminKey.trim())
       if ('job_id' in result) {

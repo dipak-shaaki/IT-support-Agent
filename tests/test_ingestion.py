@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from langchain_core.documents import Document
 
+from app.services import ingestion
 from app.services.ingestion import SUPPORTED, chunk_documents, load_file
 
 
@@ -137,3 +138,22 @@ def test_plain_markdown_still_uses_the_text_loader(tmp_path: Path):
     assert len(documents) == 1
     assert documents[0].metadata["source"] == str(source)
     assert "Use the VPN client." in documents[0].page_content
+
+
+def test_index_file_preserves_the_sanitized_upload_name(monkeypatch, tmp_path: Path):
+    source = tmp_path / "random-upload-id.md"
+    document = Document(page_content="VPN steps", metadata={"source": str(source)})
+    captured = []
+    monkeypatch.setattr(ingestion, "get_settings", lambda: type("Settings", (), {"upload_dir": str(tmp_path)})())
+    monkeypatch.setattr(ingestion, "load_file", lambda path: [document])
+    monkeypatch.setattr(
+        ingestion, "replace_documents", lambda chunks: captured.extend(chunks) or ["vector-1"]
+    )
+
+    count, ids = ingestion.index_file(source, "vpn.md")
+
+    assert count == 1
+    assert ids == ["vector-1"]
+    assert captured[0].metadata["original_filename"] == "vpn.md"
+    assert captured[0].metadata["file"] == "vpn.md"
+    assert captured[0].metadata["source"] == str(tmp_path / "vpn.md")

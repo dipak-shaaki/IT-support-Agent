@@ -84,6 +84,16 @@ def _source_name(source: str) -> str:
     return PurePosixPath(source.replace("\\", "/")).name.casefold()
 
 
+def _report_output_path(path: Path) -> Path:
+    report_root = Path(__file__).with_name("reports").resolve()
+    if path.is_symlink():
+        raise ValueError(f"Refusing to write evaluation output through a symlink: {path}")
+    resolved = path.resolve()
+    if resolved == report_root or report_root not in resolved.parents:
+        raise ValueError(f"Evaluation output must be within {report_root}")
+    return resolved
+
+
 def _retrieval_scores(
     documents: list[dict[str, str]], expected_sources: list[str], k: int = 5
 ) -> dict[str, float]:
@@ -363,8 +373,12 @@ def main() -> int:
     output = json.dumps(report, indent=2, ensure_ascii=False)
     print(output)
     if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(output + "\n", encoding="utf-8")
+        try:
+            report_path = _report_output_path(args.output)
+        except ValueError as exc:
+            parser.error(str(exc))
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(output + "\n", encoding="utf-8")
     return 0 if report["passed"] == report["total"] else 1
 
 

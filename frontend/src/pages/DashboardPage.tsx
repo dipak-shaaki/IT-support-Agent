@@ -19,10 +19,10 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { getDashboardStats } from '../api/client'
+import { readAdminKey, saveAdminKey } from '../api/browserStorage'
 import { Sidebar } from '../components/Sidebar'
 import type { DashboardStats } from '../types'
 
-const ADMIN_KEY_STORAGE = 'it_copilot_admin_key'
 const SOURCE_LABELS: Record<string, string> = {
   private_kb: 'Private knowledge base',
   web_search: 'Web fallback',
@@ -32,13 +32,13 @@ const SOURCE_LABELS: Record<string, string> = {
 
 export function DashboardPage() {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  const [adminKey, setAdminKey] = useState(() => sessionStorage.getItem(ADMIN_KEY_STORAGE) ?? '')
+  const [adminKey, setAdminKey] = useState(readAdminKey)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const savedKey = sessionStorage.getItem(ADMIN_KEY_STORAGE)
+    const savedKey = readAdminKey()
     if (!savedKey) return
     let active = true
 
@@ -71,7 +71,7 @@ export function DashboardPage() {
 
     setLoading(true)
     setStatus('')
-    sessionStorage.setItem(ADMIN_KEY_STORAGE, key)
+    saveAdminKey(key)
     try {
       setStats(await getDashboardStats(key))
       setStatus(`Updated ${new Date().toLocaleTimeString()}`)

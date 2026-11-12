@@ -141,7 +141,12 @@ def test_process_job_marks_done_and_removes_the_upload(monkeypatch, tmp_path):
     upload = tmp_path / "vpn.md"
     upload.write_text("VPN steps")
     calls = []
-    monkeypatch.setattr(worker, "index_file", lambda path: (2, ["a", "b"]))
+    indexed = []
+    monkeypatch.setattr(
+        worker,
+        "index_file",
+        lambda path, original_filename: indexed.append((path, original_filename)) or (2, ["a", "b"]),
+    )
     monkeypatch.setattr(
         worker,
         "mark_done",
@@ -151,6 +156,7 @@ def test_process_job_marks_done_and_removes_the_upload(monkeypatch, tmp_path):
     worker.process_job({"job_id": "job-1", "file": "vpn.md", "path": str(upload)})
 
     assert calls == [("job-1", 2, 2)]
+    assert indexed == [(upload, "vpn.md")]
     assert not upload.exists()
 
 
@@ -161,7 +167,7 @@ def test_process_job_records_failure_and_removes_the_upload(monkeypatch, tmp_pat
     monkeypatch.setattr(
         worker,
         "index_file",
-        lambda path: (_ for _ in ()).throw(ValueError("The uploaded document contains no indexable text")),
+        lambda path, original_filename: (_ for _ in ()).throw(ValueError("The uploaded document contains no indexable text")),
     )
     monkeypatch.setattr(
         worker,
@@ -216,7 +222,7 @@ def test_process_job_keeps_the_upload_when_the_status_write_fails(
 ):
     upload = tmp_path / "vpn.md"
     upload.write_text("VPN steps")
-    monkeypatch.setattr(worker, "index_file", lambda path: (1, ["a"]))
+    monkeypatch.setattr(worker, "index_file", lambda path, original_filename: (1, ["a"]))
     monkeypatch.setattr(
         worker,
         "mark_done",

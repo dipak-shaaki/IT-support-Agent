@@ -6,10 +6,34 @@ import type {
   IngestResponse,
 } from '../types'
 
-const apiBase = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+const apiBase = (() => {
+  const configured = (import.meta.env.VITE_API_BASE_URL ?? '').trim()
+  if (!configured) return ''
+
+  let apiOrigin: URL
+  try {
+    apiOrigin = new URL(configured)
+  } catch {
+    throw new Error('VITE_API_BASE_URL must be an absolute HTTP(S) origin.')
+  }
+  if (
+    !['http:', 'https:'].includes(apiOrigin.protocol)
+    || apiOrigin.username
+    || apiOrigin.password
+    || apiOrigin.pathname !== '/'
+    || apiOrigin.search
+    || apiOrigin.hash
+  ) {
+    throw new Error('VITE_API_BASE_URL must be a trusted HTTP(S) origin without a path.')
+  }
+  return apiOrigin.origin
+})()
 
 export function apiUrl(path: string): string {
-  return `${apiBase}${path}`
+  if (!path.startsWith('/api/') || path.startsWith('//')) {
+    throw new Error('API requests must use a controlled /api/ path.')
+  }
+  return apiBase ? new URL(path, apiBase).toString() : path
 }
 
 async function responseError(response: Response): Promise<Error> {

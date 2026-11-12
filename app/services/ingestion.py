@@ -7,6 +7,7 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from app.core.config import get_settings
 from app.rag.vectorstore import replace_documents
 
 SUPPORTED = {".pdf", ".txt", ".md", ".docx"}
@@ -17,11 +18,11 @@ CHUNK_OVERLAP = 150
 RECORD_CHUNK_SIZE = 2500
 RECORD_CHUNK_OVERLAP = 200
 
-RECORD_HEADING = re.compile(r"^## (IT-\d+)\s*$", re.M)
-METADATA_LINE = re.compile(r"^- ([A-Za-z_]+):\s*(.*?)\s*$", re.M)
-QUESTION_SECTION = re.compile(r"### Question\s*\n+(.*?)\n+### Answer", re.S)
-ANSWER_SECTION = re.compile(r"### Answer\s*\n+(.*?)\s*$", re.S)
-TRAILING_RULE = re.compile(r"\n+-{3,}\s*$")
+RECORD_HEADING = re.compile(r"^## (IT-\d+)[ \t]*$", re.M)
+METADATA_LINE = re.compile(r"^- ([A-Za-z_]+):[ \t]*(.*?)[ \t]*$", re.M)
+QUESTION_SECTION = re.compile(r"### Question[ \t]*\n+(.*?)\n+### Answer", re.S)
+ANSWER_SECTION = re.compile(r"### Answer[ \t]*\n+(.*)$", re.S)
+TRAILING_RULE = re.compile(r"\n+-{3,}[ \t\r\n]*$")
 
 
 class EmptyDocumentError(ValueError):
@@ -130,9 +131,18 @@ def chunk_documents(docs: Iterable[Document]) -> list[Document]:
     return chunks
 
 
-def index_file(path: Path) -> tuple[int, list[str]]:
+def index_file(
+    path: Path, original_filename: str | None = None
+) -> tuple[int, list[str]]:
     """Parse, chunk, embed and store one document. Used by inline and queued ingestion."""
-    chunks = chunk_documents(load_file(path))
+    documents = load_file(path)
+    if original_filename:
+        source = str(Path(get_settings().upload_dir).resolve() / original_filename)
+        for document in documents:
+            document.metadata["source"] = source
+            document.metadata["file"] = original_filename
+            document.metadata["original_filename"] = original_filename
+    chunks = chunk_documents(documents)
     if not chunks:
         raise EmptyDocumentError("The uploaded document contains no indexable text")
     return len(chunks), replace_documents(chunks)

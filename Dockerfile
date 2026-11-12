@@ -3,9 +3,10 @@ FROM node:20-alpine AS frontend-build
 WORKDIR /frontend
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
-COPY frontend/ ./
+COPY frontend/src/ ./src/
+COPY frontend/index.html frontend/vite.config.ts frontend/tsconfig.json frontend/tsconfig.app.json frontend/tsconfig.node.json ./
 RUN npm run build
 
 
@@ -23,9 +24,10 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 # Install dependencies first so code changes don't invalidate this layer
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project --no-build
 
-COPY . .
+COPY app/ ./app/
+COPY data/sample_kb/ ./data/sample_kb/
 COPY --from=frontend-build /frontend/dist /app/frontend/dist
 ENV PATH="/app/.venv/bin:$PATH" \
     FASTEMBED_CACHE_PATH=/app/.cache/fastembed
@@ -33,8 +35,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # Bake the embedding model and keyword corpus into the image so a cold start
 # does not download or rebuild them. Keep in sync with EMBEDDING_MODEL.
 ARG EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-RUN python -c "from fastembed import TextEmbedding; TextEmbedding('${EMBEDDING_MODEL}')"
-RUN python -m app.build_bm25
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('${EMBEDDING_MODEL}')" \
+    && python -m app.build_bm25
 
 # Only the writable paths need to change owner; chowning the whole image is
 # slow on large layers and is not required for read-only app files.

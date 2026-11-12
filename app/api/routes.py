@@ -1,12 +1,16 @@
 import json
 import logging
+import re
+import zipfile
 from pathlib import Path
+from uuid import uuid4
 from time import perf_counter
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, StreamingResponse
+import anyio
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from redis.exceptions import RedisError
 
@@ -308,20 +312,27 @@ async def ingest(
     file: UploadFile = File(...),
     __: None = Depends(require_admin),
 ):
-    suffix = Path(file.filename or "").suffix.lower()
+    original_filename = _safe_upload_filename(file.filename)
+    suffix = Path(original_filename).suffix.lower()
     if suffix not in SUPPORTED:
         INGEST_REQUESTS.labels("rejected").inc()
         raise HTTPException(status_code=400, detail=f"Supported: {', '.join(sorted(SUPPORTED))}")
-    upload_dir = Path(settings.upload_dir)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    dest = upload_dir / Path(file.filename).name
+    upload_dir = Path(settings.upload_dir).resolve()
+    await anyio.to_thread.run_sync(lambda: upload_dir.mkdir(parents=True, exist_ok=True))
+    dest = (upload_dir / f"{uuid4().hex}{suffix}").resolve()
+    if dest.parent != upload_dir:
+        raise HTTPException(status_code=400, detail="Invalid upload destination")
 
     if settings.ingest_mode == "queue":
+        saved = False
         try:
             await _save_upload(file, dest)
-            job_id = await run_in_threadpool(create_job, dest.name, str(dest))
+            saved = True
+            await run_in_threadpool(_validate_upload_content, dest, suffix)
+            job_id = await run_in_threadpool(create_job, original_filename, str(dest))
         except RedisError as exc:
-            dest.unlink(missing_ok=True)
+            if saved:
+                await _remove_upload(dest)
             INGEST_REQUESTS.labels("error").inc()
             logger.exception("Could not enqueue ingestion job file=%s", dest.name)
             raise HTTPException(
@@ -329,36 +340,43 @@ async def ingest(
                 detail="The ingestion queue is unavailable. Please try again.",
             ) from exc
         except Exception:
-            dest.unlink(missing_ok=True)
+            if saved:
+                await _remove_upload(dest)
             raise
         INGEST_REQUESTS.labels("queued").inc()
         return JSONResponse(
             status_code=202,
-            content={"job_id": job_id, "status": "queued", "file": dest.name},
+            content={"job_id": job_id, "status": "queued", "file": original_filename},
         )
 
+    saved = False
     try:
         await _save_upload(file, dest)
-        chunks, ids = await run_in_threadpool(index_file, dest)
+        saved = True
+        await run_in_threadpool(_validate_upload_content, dest, suffix)
+        chunks, ids = await run_in_threadpool(index_file, dest, original_filename)
     except EmptyDocumentError as exc:
-        dest.unlink(missing_ok=True)
+        if saved:
+            await _remove_upload(dest)
         INGEST_REQUESTS.labels("empty").inc()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except HTTPException:
-        dest.unlink(missing_ok=True)
+        if saved:
+            await _remove_upload(dest)
         INGEST_REQUESTS.labels("rejected").inc()
         raise
     except Exception as exc:
-        logger.exception("Document ingestion failed file=%s", dest.name)
-        dest.unlink(missing_ok=True)
+        logger.exception("Document ingestion failed file=%s", original_filename)
+        if saved:
+            await _remove_upload(dest)
         INGEST_REQUESTS.labels("error").inc()
         raise HTTPException(
             status_code=500,
             detail="The document could not be indexed. Please try again.",
         ) from exc
-    dest.unlink(missing_ok=True)
+    await _remove_upload(dest)
     INGEST_REQUESTS.labels("indexed").inc()
-    return {"message": "Document indexed", "file": dest.name, "chunks": chunks, "ids_created": len(ids)}
+    return {"message": "Document indexed", "file": original_filename, "chunks": chunks, "ids_created": len(ids)}
 
 
 @router.get("/ingest/jobs/{job_id}")
@@ -382,8 +400,10 @@ def ingest_job(
 
 async def _save_upload(file: UploadFile, dest: Path) -> None:
     total = 0
+    created = False
     try:
-        with dest.open("wb") as out:
+        async with await anyio.open_file(dest, "xb") as out:
+            created = True
             while chunk := await file.read(1024 * 1024):
                 total += len(chunk)
                 if total > settings.max_upload_bytes:
@@ -394,7 +414,59 @@ async def _save_upload(file: UploadFile, dest: Path) -> None:
                             f"{settings.max_upload_bytes // (1024 * 1024)} MB upload limit"
                         ),
                     )
-                out.write(chunk)
+                await out.write(chunk)
     except BaseException:
-        dest.unlink(missing_ok=True)
+        if created:
+            await _remove_upload(dest)
         raise
+
+
+async def _remove_upload(path: Path) -> None:
+    await anyio.to_thread.run_sync(lambda: path.unlink(missing_ok=True))
+
+
+def _safe_upload_filename(filename: str | None) -> str:
+    """Keep a bounded display name as metadata; never use it as a path."""
+    normalized = (filename or "document").replace("\\", "/")
+    basename = normalized.rsplit("/", 1)[-1]
+    basename = re.sub(r"[\x00-\x1f\x7f]", "", basename).strip(" .")
+    if not basename or basename in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    return basename[:255]
+
+
+def _validate_upload_content(path: Path, suffix: str) -> None:
+    """Check file signatures/content before handing uploads to document parsers."""
+    with path.open("rb") as uploaded:
+        prefix = uploaded.read(1024)
+        if suffix == ".pdf":
+            valid = b"%PDF-" in prefix
+        elif suffix == ".docx":
+            valid = prefix.startswith(b"PK\x03\x04")
+            valid = valid and _is_docx(path)
+        else:
+            valid = b"\x00" not in prefix
+            if valid:
+                valid = _is_utf8_text(path)
+    if not valid:
+        raise HTTPException(status_code=400, detail="File content does not match its extension")
+
+
+def _is_docx(path: Path) -> bool:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = set(archive.namelist())
+            return "[Content_Types].xml" in names and "word/document.xml" in names
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
+def _is_utf8_text(path: Path) -> bool:
+    try:
+        with path.open("r", encoding="utf-8") as uploaded:
+            for line in uploaded:
+                if "\x00" in line:
+                    return False
+        return True
+    except (OSError, UnicodeDecodeError):
+        return False

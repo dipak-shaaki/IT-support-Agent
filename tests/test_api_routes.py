@@ -6,6 +6,8 @@ from uuid import UUID
 
 from app.api import routes
 from pathlib import Path
+from types import SimpleNamespace
+from concurrent.futures import ThreadPoolExecutor
 from langchain_core.messages import AIMessage, HumanMessage
 
 
@@ -345,8 +347,8 @@ def test_ingest_saves_parses_chunks_and_indexes_document(monkeypatch, tmp_path):
     monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
     parsed_files = []
 
-    def fake_index_file(path: Path):
-        parsed_files.append((path.name, path.read_bytes()))
+    def fake_index_file(path: Path, original_filename: str):
+        parsed_files.append((path.name, path.read_bytes(), original_filename))
         return 1, ["vector-1"]
 
     monkeypatch.setattr(routes, "index_file", fake_index_file)
@@ -364,7 +366,11 @@ def test_ingest_saves_parses_chunks_and_indexes_document(monkeypatch, tmp_path):
         "chunks": 1,
         "ids_created": 1,
     }
-    assert parsed_files == [("vpn.md", b"VPN connection instructions")]
+    assert len(parsed_files) == 1
+    assert parsed_files[0][0].endswith(".md")
+    assert parsed_files[0][0] != "vpn.md"
+    assert parsed_files[0][1] == b"VPN connection instructions"
+    assert parsed_files[0][2] == "vpn.md"
     assert list(tmp_path.iterdir()) == []
 
 
@@ -372,7 +378,7 @@ def test_ingest_rejects_documents_without_indexable_text(monkeypatch, tmp_path):
     monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
     monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
 
-    def empty_document(path):
+    def empty_document(path, original_filename):
         raise routes.EmptyDocumentError("The uploaded document contains no indexable text")
 
     monkeypatch.setattr(routes, "index_file", empty_document)
@@ -430,8 +436,102 @@ def test_ingest_queue_mode_returns_job_and_keeps_file_for_the_worker(monkeypatch
         "status": "queued",
         "file": "vpn.md",
     }
-    assert created == [("vpn.md", str(tmp_path / "vpn.md"))]
-    assert (tmp_path / "vpn.md").read_bytes() == b"VPN connection instructions"
+    assert len(created) == 1
+    assert created[0][0] == "vpn.md"
+    assert Path(created[0][1]).parent == tmp_path
+    assert Path(created[0][1]).name.endswith(".md")
+    assert Path(created[0][1]).name != "vpn.md"
+    assert Path(created[0][1]).read_bytes() == b"VPN connection instructions"
+
+
+@pytest.mark.parametrize(
+    "filename", ["../../outside.md", r"..\\..\\outside.md", "/tmp/outside.md"]
+)
+def test_ingest_uses_generated_path_for_traversal_filenames(monkeypatch, tmp_path, filename):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path / "uploads"))
+    indexed = []
+
+    def fake_index_file(path: Path, original_filename: str):
+        indexed.append((path, original_filename))
+        return 1, ["vector-1"]
+
+    monkeypatch.setattr(routes, "index_file", fake_index_file)
+    response = create_client().post(
+        "/api/ingest",
+        headers={"x-admin-key": "test-secret"},
+        files={"file": (filename, b"valid text", "text/markdown")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["file"] == "outside.md"
+    assert indexed[0][0].parent == tmp_path / "uploads"
+    assert indexed[0][0].name != "outside.md"
+    assert indexed[0][1] == "outside.md"
+    assert not (tmp_path / "outside.md").exists()
+    assert list((tmp_path / "uploads").iterdir()) == []
+
+
+def test_ingest_rejects_content_that_does_not_match_extension(monkeypatch, tmp_path):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
+
+    response = create_client().post(
+        "/api/ingest",
+        headers={"x-admin-key": "test-secret"},
+        files={"file": ("not-a-pdf.pdf", b"plain text", "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "File content does not match its extension"}
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ingest_rejects_symlink_escape_and_preserves_target(monkeypatch, tmp_path):
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("keep this file", encoding="utf-8")
+    (upload_dir / f"{'a' * 32}.md").symlink_to(outside)
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    monkeypatch.setattr(routes.settings, "upload_dir", str(upload_dir))
+    monkeypatch.setattr(routes, "uuid4", lambda: SimpleNamespace(hex="a" * 32))
+
+    response = create_client().post(
+        "/api/ingest",
+        headers={"x-admin-key": "test-secret"},
+        files={"file": ("vpn.md", b"new content", "text/markdown")},
+    )
+
+    assert response.status_code == 400
+    assert outside.read_text(encoding="utf-8") == "keep this file"
+
+
+def test_concurrent_uploads_use_distinct_storage_names(monkeypatch, tmp_path):
+    monkeypatch.setattr(routes.settings, "admin_api_key", "test-secret")
+    monkeypatch.setattr(routes.settings, "upload_dir", str(tmp_path))
+    monkeypatch.setattr(routes.settings, "ingest_mode", "queue")
+    created = []
+
+    def create_job(filename, path):
+        created.append(Path(path))
+        return "b" * 32
+
+    monkeypatch.setattr(routes, "create_job", create_job)
+
+    def upload(body: bytes):
+        return create_client().post(
+            "/api/ingest",
+            headers={"x-admin-key": "test-secret"},
+            files={"file": ("same.md", body, "text/markdown")},
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(upload, [b"first document", b"second document"]))
+
+    assert [response.status_code for response in responses] == [202, 202]
+    assert len({path.name for path in created}) == 2
+    assert {path.read_bytes() for path in created} == {b"first document", b"second document"}
 
 
 def test_ingest_queue_failure_removes_the_upload(monkeypatch, tmp_path):

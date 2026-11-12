@@ -11,11 +11,11 @@ import {
   WandSparkles,
 } from 'lucide-react'
 import { getConversation, streamChat } from '../api/client'
+import { clearConversationId, readConversationId, saveConversationId } from '../api/browserStorage'
 import { Markdown } from '../components/Markdown'
 import { Sidebar } from '../components/Sidebar'
 import type { ChatEvent, ConversationMessage } from '../types'
 
-const CONVERSATION_STORAGE = 'enterprise-it-support-conversation-id'
 const SUGGESTIONS = [
   { icon: '⌁', text: 'I can’t connect to the company VPN' },
   { icon: '↻', text: 'Help me reset my password' },
@@ -32,7 +32,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 export function ChatPage() {
   const [conversationId, setConversationId] = useState(
-    () => localStorage.getItem(CONVERSATION_STORAGE),
+    readConversationId,
   )
   const [messages, setMessages] = useState<ConversationMessage[]>([])
   const [activity, setActivity] = useState<string[]>([])
@@ -45,7 +45,7 @@ export function ChatPage() {
   const textarea = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    const savedId = localStorage.getItem(CONVERSATION_STORAGE)
+    const savedId = readConversationId()
     if (!savedId) return
     let active = true
     getConversation(savedId)
@@ -75,7 +75,7 @@ export function ChatPage() {
 
   function startNewChat() {
     if (busy || restoring) return
-    localStorage.removeItem(CONVERSATION_STORAGE)
+    clearConversationId()
     setConversationId(null)
     setMessages([])
     setActivity([])
@@ -124,8 +124,9 @@ export function ChatPage() {
           onTrace: addActivity,
           onDone: (eventDone) => {
             completed = true
-            localStorage.setItem(CONVERSATION_STORAGE, eventDone.conversation_id)
-            setConversationId(eventDone.conversation_id)
+            if (saveConversationId(eventDone.conversation_id)) {
+              setConversationId(eventDone.conversation_id)
+            }
             setSource(eventDone.answer
               ? SOURCE_LABELS[eventDone.source_used] ?? eventDone.source_used
               : '')

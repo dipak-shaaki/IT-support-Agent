@@ -1,7 +1,9 @@
 import hashlib
 import json
 import logging
+import os
 import re
+import tempfile
 from pathlib import Path
 
 from langchain_core.documents import Document
@@ -23,7 +25,7 @@ def chunk_key(document: Document) -> str:
     start_index = document.metadata.get("start_index")
     if start_index is not None:
         return f"{source}#{start_index}"
-    digest = hashlib.sha1(document.page_content.encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(document.page_content.encode("utf-8")).hexdigest()
     return f"{source}#{digest}"
 
 
@@ -32,7 +34,7 @@ def dedupe_by_content(documents: list[Document]) -> list[Document]:
     seen: set[str] = set()
     unique: list[Document] = []
     for document in documents:
-        digest = hashlib.sha1(document.page_content.encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(document.page_content.encode("utf-8")).hexdigest()
         if digest in seen:
             continue
         seen.add(digest)
@@ -56,7 +58,10 @@ class Bm25Index:
     """Persisted BM25 corpus over the same chunks stored in Pinecone."""
 
     def __init__(self, path: str | Path):
-        self.path = Path(path)
+        candidate = Path(path)
+        if candidate.is_symlink():
+            raise ValueError(f"Refusing to load a BM25 corpus through a symlink: {candidate}")
+        self.path = candidate.parent.resolve() / candidate.name
         self._records = self._load()
         self._bm25: BM25L | None = None
         self._build()
@@ -84,12 +89,20 @@ class Bm25Index:
 
     def _write(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
-        temporary.write_text(
-            "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in self._records),
-            encoding="utf-8",
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent
         )
-        temporary.replace(self.path)
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                output.writelines(
+                    json.dumps(record, ensure_ascii=False) + "\n"
+                    for record in self._records
+                )
+            temporary.replace(self.path)
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
 
     def add(self, documents: list[Document]) -> None:
         by_key = {record["id"]: record for record in self._records}

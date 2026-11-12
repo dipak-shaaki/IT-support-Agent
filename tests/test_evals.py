@@ -1,6 +1,30 @@
+from pathlib import Path
+
+import pytest
+
 from evals import run as eval_runner
-from evals.run import evaluate_case, load_cases
+from evals.run import _report_output_path, evaluate_case, load_cases
 from langchain_core.messages import ToolMessage
+
+
+def test_eval_report_output_rejects_paths_outside_report_directory(tmp_path: Path):
+    with pytest.raises(ValueError, match="within"):
+        _report_output_path(tmp_path / "outside.json")
+
+
+def test_eval_report_output_rejects_symlinks(tmp_path: Path):
+    report_root = Path(eval_runner.__file__).with_name("reports")
+    report_root.mkdir(exist_ok=True)
+    target = tmp_path / "outside.json"
+    target.write_text("keep me", encoding="utf-8")
+    link = report_root / "test-output-link.json"
+    link.symlink_to(target)
+    try:
+        with pytest.raises(ValueError, match="symlink"):
+            _report_output_path(link)
+    finally:
+        link.unlink(missing_ok=True)
+    assert target.read_text(encoding="utf-8") == "keep me"
 
 
 def test_eval_cases_define_expected_behavior():

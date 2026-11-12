@@ -33,7 +33,7 @@ def process_job(job: dict) -> None:
         return
     path = Path(job["path"])
     try:
-        chunks, ids = index_file(path)
+        chunks, ids = index_file(path, job.get("file"))
     except Exception as exc:
         logger.exception("Ingestion job failed job_id=%s file=%s", job["job_id"], job["file"])
         mark_failed(job["job_id"], str(exc) or "Indexing failed")
