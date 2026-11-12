@@ -201,18 +201,15 @@ def test_worker_retries_after_a_redis_outage(monkeypatch):
         attempts.append(1)
         if len(attempts) == 1:
             raise RedisConnectionError("redis is down")
-        worker._stopping = True
+        monkeypatch.setattr(worker, "_stopping", True)
         return None
 
     monkeypatch.setattr(worker, "claim_job", flaky_claim)
     monkeypatch.setattr(worker, "configure_logging", lambda: None)
     monkeypatch.setattr(worker, "_wait", lambda seconds: None)
     monkeypatch.setattr(worker.signal, "signal", lambda *args: None)
-    worker._stopping = False
-    try:
-        worker.main()
-    finally:
-        worker._stopping = False
+    monkeypatch.setattr(worker, "_stopping", False)
+    worker.main()
 
     assert len(attempts) == 2
 

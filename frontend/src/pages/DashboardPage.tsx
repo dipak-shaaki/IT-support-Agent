@@ -131,7 +131,7 @@ export function DashboardPage() {
                   {loading ? 'Loading' : 'Load stats'}
                 </button>
               </form>
-              <span className={`dashboard-status${status && !stats ? ' error' : ''}`} role="status">{status || 'Admin access required'}</span>
+              <output className={`dashboard-status${status && !stats ? ' error' : ''}`} aria-live="polite">{status || 'Admin access required'}</output>
             </div>
           </section>
 
@@ -155,7 +155,9 @@ export function DashboardPage() {
                   <SectionHeading icon={<BarChart3 size={16} />} title="Answer sources" subtitle="Where the assistant found its response" />
                   <div className="bar-list">
                     {stats.sources.length ? stats.sources.map((item) => {
-                      const color = item.source === 'private_kb' ? 'green' : item.source === 'web_search' ? 'violet' : 'amber'
+                      let color = 'amber'
+                      if (item.source === 'private_kb') color = 'green'
+                      else if (item.source === 'web_search') color = 'violet'
                       return (
                         <div className="bar-row" key={item.source}>
                           <div className="bar-label-wrap"><span className={`bar-dot ${color}`} /><span>{SOURCE_LABELS[item.source] ?? item.source}</span></div>

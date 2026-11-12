@@ -25,31 +25,28 @@ def load_cases(path: Path = CASES_PATH) -> list[dict[str, Any]]:
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
-        try:
-            case = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"{path}:{line_number}: invalid JSON") from exc
-        required = {"name", "question", "expected_source"}
-        missing = required - case.keys()
-        if missing:
-            raise ValueError(
-                f"{path}:{line_number}: missing fields {', '.join(sorted(missing))}"
-            )
-        if case["name"] in seen_names:
-            raise ValueError(f"{path}:{line_number}: duplicate case name {case['name']!r}")
-        seen_names.add(case["name"])
-        for field in ("expected_tools", "expected_relevant_sources"):
-            if field in case and (
-                not isinstance(case[field], list)
-                or not all(isinstance(value, str) for value in case[field])
-            ):
-                raise ValueError(
-                    f"{path}:{line_number}: {field} must be a list of strings"
-                )
-        cases.append(case)
+        cases.append(_parse_case(path, line, line_number, seen_names))
     if not cases:
         raise ValueError(f"No evaluation cases found in {path}")
     return cases
+
+
+def _parse_case(path: Path, line: str, line_number: int, seen_names: set) -> dict[str, Any]:
+    try:
+        case = json.loads(line)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}:{line_number}: invalid JSON") from exc
+    missing = {"name", "question", "expected_source"} - case.keys()
+    if missing:
+        raise ValueError(f"{path}:{line_number}: missing fields {', '.join(sorted(missing))}")
+    if case["name"] in seen_names:
+        raise ValueError(f"{path}:{line_number}: duplicate case name {case['name']!r}")
+    seen_names.add(case["name"])
+    for field in ("expected_tools", "expected_relevant_sources"):
+        value = case.get(field)
+        if field in case and (not isinstance(value, list) or not all(isinstance(item, str) for item in value)):
+            raise ValueError(f"{path}:{line_number}: {field} must be a list of strings")
+    return case
 
 
 def _called_tools(result: dict[str, Any]) -> list[str]:
@@ -232,27 +229,33 @@ def run_evaluations(
         raise ValueError("repeats must be at least 1")
 
     started_at = datetime.now(timezone.utc)
-    results = []
-    latencies = []
+    results, latencies = _evaluate_repetitions(cases, repeats)
+    return _evaluation_summary(cases, results, latencies, repeats, started_at)
+
+
+def _evaluate_repetitions(cases, repeats):
+    results, latencies = [], []
     for repetition in range(1, repeats + 1):
         for case in cases:
-            started = time.perf_counter()
-            try:
-                result = ask(case["question"])
-                evaluated = evaluate_case(case, result)
-            except Exception as exc:
-                logger.error("Evaluation case %s failed: %s", case["name"], exc)
-                evaluated = {
-                    "name": case["name"],
-                    "passed": False,
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-            elapsed = time.perf_counter() - started
-            latencies.append(elapsed)
+            evaluated, elapsed = _evaluate_one(case)
             evaluated["repetition"] = repetition
             evaluated["latency_seconds"] = elapsed
             results.append(evaluated)
+            latencies.append(elapsed)
+    return results, latencies
 
+
+def _evaluate_one(case):
+    started = time.perf_counter()
+    try:
+        evaluated = evaluate_case(case, ask(case["question"]))
+    except Exception as exc:
+        logger.exception("Evaluation case %s failed", case["name"])
+        evaluated = {"name": case["name"], "passed": False, "error": f"{type(exc).__name__}: {exc}"}
+    return evaluated, time.perf_counter() - started
+
+
+def _evaluation_summary(cases, results, latencies, repeats, started_at):
     passed = sum(result["passed"] for result in results)
     source_cases = []
     tool_cases = []

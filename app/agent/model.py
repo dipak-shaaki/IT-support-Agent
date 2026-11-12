@@ -129,21 +129,12 @@ def invoke_with_fallbacks(models, messages, request_id: str = ""):
 def stream_with_fallbacks(models, messages, writer, request_id: str = ""):
     failures = []
     for model in models:
-        response: AIMessageChunk | None = None
-        output_started = False
         try:
-            for chunk in model.stream(messages):
-                text = content_text(chunk.content)
-                if text:
-                    output_started = True
-                    writer({"type": "token", "text": text})
-                response = chunk if response is None else response + chunk
-            if response is None:
-                raise RuntimeError("The model returned no response chunks")
+            response = _stream_model(model, messages, writer)
             _log_token_usage(model, response, request_id)
             return response
         except Exception as exc:
-            if output_started:
+            if getattr(exc, "output_started", False):
                 raise RuntimeError(
                     f"Chat model {type(model).__name__} streaming failed after "
                     "output began; refusing to retry to avoid duplicating a "
@@ -163,3 +154,22 @@ def stream_with_fallbacks(models, messages, writer, request_id: str = ""):
         f"All {len(models)} configured chat model provider(s) failed: "
         + " | ".join(failures)
     )
+
+
+def _stream_model(model, messages, writer) -> AIMessageChunk:
+    response = None
+    output_started = False
+    try:
+        for chunk in model.stream(messages):
+            text = content_text(chunk.content)
+            if text:
+                output_started = True
+                writer({"type": "token", "text": text})
+            response = chunk if response is None else response + chunk
+    except Exception as exc:
+        if output_started:
+            exc.output_started = True
+        raise
+    if response is None:
+        raise RuntimeError("The model returned no response chunks")
+    return response

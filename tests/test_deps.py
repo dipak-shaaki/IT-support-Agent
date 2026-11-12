@@ -58,8 +58,9 @@ def test_current_user_reads_trusted_proxy_header(monkeypatch):
 def test_current_user_requires_header_when_auth_is_proxy(monkeypatch):
     monkeypatch.setattr(deps.settings, "auth_mode", "proxy")
 
+    request = make_request()
     with pytest.raises(HTTPException) as error:
-        deps.current_user(make_request())
+        deps.current_user(request)
 
     assert error.value.status_code == 401
 
@@ -71,8 +72,9 @@ def test_rate_limit_rejects_requests_over_the_window(monkeypatch):
 
     deps.rate_limit(make_request(), "alice")
     deps.rate_limit(make_request(), "alice")
+    request = make_request()
     with pytest.raises(HTTPException) as error:
-        deps.rate_limit(make_request(), "alice")
+        deps.rate_limit(request, "alice")
 
     assert error.value.status_code == 429
     assert error.value.headers == {"Retry-After": "60"}
@@ -86,8 +88,9 @@ def test_rate_limit_separates_anonymous_callers_by_ip(monkeypatch):
     deps.rate_limit(make_request(client=("10.0.0.1", 1000)), None)
     deps.rate_limit(make_request(client=("10.0.0.2", 1000)), None)
 
+    request = make_request(client=("10.0.0.1", 1000))
     with pytest.raises(HTTPException):
-        deps.rate_limit(make_request(client=("10.0.0.1", 1000)), None)
+        deps.rate_limit(request, None)
 
 
 def test_rate_limit_forgets_requests_outside_the_window(monkeypatch):
@@ -151,7 +154,8 @@ def test_require_admin_rejects_an_empty_key_when_no_key_is_configured(monkeypatc
     monkeypatch.setattr(deps.settings, "admin_api_key", "")
     monkeypatch.setattr(deps.settings, "auth_mode", "none")
 
+    request = make_request()
     with pytest.raises(HTTPException) as error:
-        deps.require_admin(make_request(), "")
+        deps.require_admin(request, "")
 
     assert error.value.status_code == 401

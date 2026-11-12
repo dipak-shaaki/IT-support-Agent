@@ -185,15 +185,14 @@ def test_invoke_reports_each_provider_failure_when_all_fail():
         def invoke(self, messages):
             raise RuntimeError(self.error)
 
+    providers = [
+        FailedProvider("Groq quota exceeded"),
+        FailedProvider("Gemini unavailable"),
+        FailedProvider("OpenAI has no credits remaining"),
+    ]
+    messages = [HumanMessage(content="Hi")]
     with pytest.raises(RuntimeError) as error:
-        agent_model.invoke_with_fallbacks(
-            [
-                FailedProvider("Groq quota exceeded"),
-                FailedProvider("Gemini unavailable"),
-                FailedProvider("OpenAI has no credits remaining"),
-            ],
-            [HumanMessage(content="Hi")],
-        )
+        agent_model.invoke_with_fallbacks(providers, messages)
 
     message = str(error.value)
     assert "All 3 configured chat model provider(s) failed" in message
@@ -260,12 +259,11 @@ def test_stream_does_not_retry_after_partial_output():
         def stream(self, messages):
             pytest.fail("A fallback must not duplicate a partial streamed answer")
 
+    providers = [PartialFailureProvider(), MustNotBeCalledProvider()]
+    messages = [HumanMessage(content="Hi")]
+    writer = lambda token: None
     with pytest.raises(RuntimeError, match="after output began"):
-        agent_model.stream_with_fallbacks(
-            [PartialFailureProvider(), MustNotBeCalledProvider()],
-            [HumanMessage(content="Hi")],
-            lambda token: None,
-        )
+        agent_model.stream_with_fallbacks(providers, messages, writer)
 
 
 def test_agent_includes_system_prompt_before_conversation(monkeypatch):

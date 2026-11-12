@@ -44,45 +44,45 @@ def load_markdown_records(path: Path) -> list[Document]:
     documents = []
     for index, (start, record_id) in enumerate(headings):
         end = headings[index + 1][0] if index + 1 < len(headings) else len(lines)
-        block = lines[start:end]
-        question_header = _section_line(block, "### Question")
-        if question_header is None:
-            continue
-        answer_header = _section_line(block, "### Answer", question_header + 1)
-        if answer_header is None:
-            continue
-
-        question = "\n".join(block[question_header + 1:answer_header]).strip()
-        answer_lines = block[answer_header + 1:]
-        while answer_lines and not answer_lines[-1].strip():
-            answer_lines.pop()
-        if answer_lines:
-            final_line = answer_lines[-1].strip()
-            if len(final_line) >= 3 and set(final_line) == {"-"}:
-                answer_lines.pop()
-        answer = "\n".join(answer_lines).strip()
-        if not question or not answer:
-            continue
-
-        meta = _metadata_from_lines(block)
-        record_number = meta.get("record_number", "")
-        metadata = {
-            "source": str(path),
-            "record_id": meta.get("id") or record_id,
-            "question": question,
-            "dataset_source": meta.get("source", ""),
-            "category": meta.get("category", ""),
-            "file": meta.get("file", path.name),
-            "document_type": meta.get("document_type", ""),
-            "language": meta.get("language", ""),
-            "start_index": line_offsets[start],
-        }
-        if record_number.isdigit():
-            metadata["record_number"] = int(record_number)
-        documents.append(
-            Document(page_content=f"{question}\n\n{answer}", metadata=metadata)
-        )
+        document = _markdown_record(lines[start:end], record_id, path, line_offsets[start])
+        if document is not None:
+            documents.append(document)
     return documents
+
+
+def _markdown_record(block: list[str], record_id: str, path: Path, start_index: int) -> Document | None:
+    question_header = _section_line(block, "### Question")
+    if question_header is None:
+        return None
+    answer_header = _section_line(block, "### Answer", question_header + 1)
+    if answer_header is None:
+        return None
+    question = "\n".join(block[question_header + 1:answer_header]).strip()
+    answer_lines = block[answer_header + 1:]
+    while answer_lines and not answer_lines[-1].strip():
+        answer_lines.pop()
+    if answer_lines and len(answer_lines[-1].strip()) >= 3 and set(answer_lines[-1].strip()) == {"-"}:
+        answer_lines.pop()
+    answer = "\n".join(answer_lines).strip()
+    if not question or not answer:
+        return None
+
+    meta = _metadata_from_lines(block)
+    metadata = {
+        "source": str(path),
+        "record_id": meta.get("id") or record_id,
+        "question": question,
+        "dataset_source": meta.get("source", ""),
+        "category": meta.get("category", ""),
+        "file": meta.get("file", path.name),
+        "document_type": meta.get("document_type", ""),
+        "language": meta.get("language", ""),
+        "start_index": start_index,
+    }
+    record_number = meta.get("record_number", "")
+    if record_number.isdigit():
+        metadata["record_number"] = int(record_number)
+    return Document(page_content=f"{question}\n\n{answer}", metadata=metadata)
 
 
 def _record_id(line: str) -> str | None:

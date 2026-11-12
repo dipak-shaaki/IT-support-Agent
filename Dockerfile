@@ -36,11 +36,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # does not download or rebuild them. Keep in sync with EMBEDDING_MODEL.
 ARG EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 RUN python -c "from fastembed import TextEmbedding; TextEmbedding('${EMBEDDING_MODEL}')" \
-    && python -m app.build_bm25
-
-# Only the writable paths need to change owner; chowning the whole image is
-# slow on large layers and is not required for read-only app files.
-RUN useradd --create-home --uid 10001 appuser \
+    && python -m app.build_bm25 \
+    && useradd --create-home --uid 10001 appuser \
     && mkdir -p /app/data /app/uploads \
     && chown -R appuser:appuser /app/data /app/uploads /app/.cache/fastembed
 USER appuser

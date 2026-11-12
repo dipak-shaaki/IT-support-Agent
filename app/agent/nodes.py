@@ -39,7 +39,7 @@ def route_initial_state(state: AgentState) -> Literal["agent", "followup_guard"]
     return "followup_guard" if state["repetitive_followup"] else "agent"
 
 
-def stop_repetitive_followup(state: AgentState):
+def stop_repetitive_followup(_state: AgentState):
     return {
         "answer": REPETITIVE_FOLLOWUP_ANSWER,
         "source_used": "direct",
@@ -146,61 +146,70 @@ def execute_tools(state: AgentState):
         raise ValueError(f"Model requested unavailable tools: {', '.join(sorted(unavailable))}")
 
     result = ToolNode(tools).invoke({"messages": [response]})
+    results_by_id = {message.tool_call_id: message for message in result["messages"]}
+    updates = _process_tool_results(response.tool_calls, results_by_id, state)
+    return {
+        "messages": result["messages"],
+        "tool_call_count": state["tool_call_count"] + len(response.tool_calls),
+        **updates,
+    }
+
+
+def _process_tool_results(calls, results_by_id, state):
     citations = list(state["citations"])
     private_kb_searched = state["private_kb_searched"]
     web_searched = state["web_searched"]
     current_query = state["current_query"]
     trace = list(state["trace"])
-
-    results_by_id = {message.tool_call_id: message for message in result["messages"]}
-    for call in response.tool_calls:
+    for call in calls:
         current_query = call.get("args", {}).get("query", current_query)
         tool_message = results_by_id.get(call["id"])
         if not isinstance(tool_message, ToolMessage):
             continue
-        try:
-            payload = json.loads(model.content_text(tool_message.content))
-        except (TypeError, json.JSONDecodeError):
-            logger.exception("Could not decode result from tool %s", call["name"])
+        payload = _decode_tool_result(tool_message, call["name"])
+        if payload is None:
             continue
-
         if call["name"] == search_private_kb.name:
             private_kb_searched = True
-            documents = payload.get("documents", [])
-            trace.append(f"Private KB results → {len(documents)} chunks")
-            for document in documents:
-                source = document.get("source", "Private KB")
-                citation = {
-                    "title": document.get("record_id")
-                    or source.rsplit("/", 1)[-1],
-                    "url": "",
-                    "type": "private_kb",
-                }
-                if citation not in citations:
-                    citations.append(citation)
+            _add_private_citations(payload, citations, trace)
         elif call["name"] == search_web.name:
             web_searched = True
-            results = payload.get("results", [])
-            trace.append(f"Web results → {len(results)} pages")
-            for item in results:
-                url = item.get("url", "")
-                citation = {
-                    "title": item.get("title") or url,
-                    "url": url,
-                    "type": "web",
-                }
-                if url and citation not in citations:
-                    citations.append(citation)
-
+            _add_web_citations(payload, citations, trace)
     return {
-        "messages": result["messages"],
-        "tool_call_count": state["tool_call_count"] + len(response.tool_calls),
         "private_kb_searched": private_kb_searched,
         "web_searched": web_searched,
         "current_query": current_query,
         "citations": citations,
         "trace": trace,
     }
+
+
+def _decode_tool_result(message, name):
+    try:
+        return json.loads(model.content_text(message.content))
+    except (TypeError, json.JSONDecodeError):
+        logger.exception("Could not decode result from tool %s", name)
+        return None
+
+
+def _add_private_citations(payload, citations, trace):
+    documents = payload.get("documents", [])
+    trace.append(f"Private KB results → {len(documents)} chunks")
+    for document in documents:
+        source = document.get("source", "Private KB")
+        citation = {"title": document.get("record_id") or source.rsplit("/", 1)[-1], "url": "", "type": "private_kb"}
+        if citation not in citations:
+            citations.append(citation)
+
+
+def _add_web_citations(payload, citations, trace):
+    results = payload.get("results", [])
+    trace.append(f"Web results → {len(results)} pages")
+    for item in results:
+        url = item.get("url", "")
+        citation = {"title": item.get("title") or url, "url": url, "type": "web"}
+        if url and citation not in citations:
+            citations.append(citation)
 
 
 def finalize(state: AgentState):
@@ -210,38 +219,7 @@ def finalize(state: AgentState):
     if isinstance(last_message, AIMessage) and not last_message.tool_calls:
         answer = model.content_text(last_message.content).strip()
     else:
-        completed_messages = messages[:-1] if isinstance(last_message, AIMessage) else messages
-        prompt = [
-            SystemMessage(
-                content=(
-                    f"{prompts.SYSTEM_PROMPT}\n"
-                    + (
-                        f"The tool-call limit ({MAX_TOOL_CALLS}) has been reached. "
-                        if state["tool_call_count"] >= MAX_TOOL_CALLS
-                        else "No additional tools are available. "
-                    )
-                    + "Answer using only the completed tool results."
-                )
-            ),
-            *completed_messages,
-        ]
-        if state["stream_tokens"]:
-            answer = ""
-            writer = get_stream_writer()
-            response = model.stream_with_fallbacks(
-                [model.llm(), *model.fallback_llms()],
-                prompt,
-                writer,
-                state["request_id"],
-            )
-            answer = model.content_text(response.content).strip()
-        else:
-            answer_message = model.invoke_with_fallbacks(
-                [model.llm(), *model.fallback_llms()],
-                prompt,
-                state["request_id"],
-            )
-            answer = model.content_text(answer_message.content).strip()
+        answer = _generate_final_answer(messages, last_message, state)
         trace.append(
             "Tool-call limit reached → finalized from completed results"
             if state["tool_call_count"] >= MAX_TOOL_CALLS
@@ -266,3 +244,30 @@ def finalize(state: AgentState):
         "source_used": source_used,
         "trace": [*trace, trace_label],
     }
+
+
+def _generate_final_answer(messages, last_message, state):
+    completed = messages[:-1] if isinstance(last_message, AIMessage) else messages
+    limit_reached = state["tool_call_count"] >= MAX_TOOL_CALLS
+    instruction = (
+        f"The tool-call limit ({MAX_TOOL_CALLS}) has been reached. "
+        if limit_reached else "No additional tools are available. "
+    )
+    prompt = [
+        SystemMessage(
+            content=(
+                f"{prompts.SYSTEM_PROMPT}\n{instruction}"
+                "Answer using only the completed tool results."
+            )
+        ),
+        *completed,
+    ]
+    providers = [model.llm(), *model.fallback_llms()]
+    if state["stream_tokens"]:
+        response = model.stream_with_fallbacks(
+            providers, prompt, get_stream_writer(), state["request_id"]
+        )
+    else:
+        response = model.invoke_with_fallbacks(providers, prompt, state["request_id"])
+    answer = model.content_text(response.content).strip()
+    return answer

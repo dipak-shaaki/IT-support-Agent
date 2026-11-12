@@ -50,6 +50,7 @@ from app.services.audit import (
 router = APIRouter(prefix="/api")
 settings = get_settings()
 logger = logging.getLogger(__name__)
+CONVERSATION_MEMORY_UNAVAILABLE = "Conversation memory is unavailable. Please try again."
 
 
 @router.get("/health")
@@ -89,7 +90,7 @@ def get_conversation(
         logger.exception("Could not load conversation history")
         raise HTTPException(
             status_code=503,
-            detail="Conversation memory is unavailable. Please try again.",
+            detail=CONVERSATION_MEMORY_UNAVAILABLE,
         ) from exc
     return {
         "conversation_id": str(conversation_id),
@@ -170,7 +171,7 @@ def chat(
         logger.exception("Conversation memory is unavailable")
         raise HTTPException(
             status_code=503,
-            detail="Conversation memory is unavailable. Please try again.",
+            detail=CONVERSATION_MEMORY_UNAVAILABLE,
         ) from exc
     except Exception as exc:
         CHAT_REQUESTS.labels("", "error").inc()
@@ -193,116 +194,77 @@ def chat_stream(
 ):
     conversation_id = payload.conversation_id or uuid4()
 
-    def events():
-        started_at = perf_counter()
-        state = initial_state(
-            payload.question,
-            stream_tokens=True,
-            request_id=str(conversation_id),
-        )
-        history: list[BaseMessage] = []
-        emitted = 0
-        audited = False
-        logger.info(
-            "Chat stream started conversation_id=%s question_chars=%d question_tokens=%d",
-            conversation_id,
-            len(payload.question),
-            question_token_count(payload.question),
-        )
-        try:
-            history = load_conversation(conversation_id, user)
-            state = initial_state(
-                payload.question,
-                history,
-                stream_tokens=True,
-                request_id=str(conversation_id),
-            )
-            for mode, chunk in agent_graph.stream(
-                state,
-                stream_mode=["updates", "custom"],
-            ):
-                if mode == "custom":
-                    if chunk.get("type") == "token":
-                        yield _sse({"type": "token", "text": chunk["text"]})
-                    continue
-                for node, delta in chunk.items():
-                    state.update(delta)
-                    trace_lines = state.get("trace", [])
-                    for line in trace_lines[emitted:]:
-                        yield _sse({"type": "trace", "node": node, "text": line})
-                    emitted = len(trace_lines)
-
-            write_audit(
-                payload.question,
-                state["source_used"],
-                state.get("trace", []),
-                state["answer"],
-            )
-            saved_messages = (
-                append_turn(history, payload.question, state["answer"])
-                if state["answer"]
-                else [*history, HumanMessage(content=payload.question)]
-            )
-            save_conversation(
-                conversation_id,
-                saved_messages,
-                user,
-            )
-            audited = True
-            logger.info(
-                "Chat stream completed conversation_id=%s source=%s tool_calls=%d duration_ms=%d",
-                conversation_id,
-                state["source_used"],
-                state["tool_call_count"],
-                int((perf_counter() - started_at) * 1000),
-            )
-            CHAT_REQUESTS.labels(state["source_used"], "ok").inc()
-            done_event = ChatDoneEvent(
-                type="done",
-                conversation_id=conversation_id,
-                answer=state["answer"],
-                source_used=state["source_used"],
-                citations=state.get("citations", []),
-                retrieval_query=state.get("current_query", payload.question),
-            )
-            yield _sse(done_event.model_dump(mode="json"))
-        except RedisError:
-            CHAT_REQUESTS.labels("", "error").inc()
-            logger.exception("Conversation memory is unavailable")
-            yield _sse({
-                "type": "error",
-                "conversation_id": str(conversation_id),
-                "message": "Conversation memory is unavailable. Please try again.",
-            })
-        except Exception as exc:
-            CHAT_REQUESTS.labels("", "error").inc()
-            logger.exception("Streaming chat failed")
-            yield _sse({
-                "type": "error",
-                "conversation_id": str(conversation_id),
-                "message": "The assistant could not complete this request. Please try again.",
-            })
-        finally:
-            if not audited:
-                logger.info(
-                    "Chat stream ended before completion conversation_id=%s duration_ms=%d",
-                    conversation_id,
-                    int((perf_counter() - started_at) * 1000),
-                )
-            # client may disconnect mid-stream; keep the audit trail either way
-            if not audited and state.get("answer"):
-                write_audit(
-                    payload.question,
-                    state.get("source_used", ""),
-                    state.get("trace", []),
-                    state["answer"],
-                )
-
     return StreamingResponse(
-        events(),
+        _chat_stream_events(payload, user, conversation_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def _chat_stream_events(payload: ChatRequest, user: str | None, conversation_id):
+    started_at = perf_counter()
+    state = initial_state(payload.question, stream_tokens=True, request_id=str(conversation_id))
+    history: list[BaseMessage] = []
+    audited = False
+    logger.info(
+        "Chat stream started conversation_id=%s question_chars=%d question_tokens=%d",
+        conversation_id, len(payload.question), question_token_count(payload.question),
+    )
+    try:
+        history = load_conversation(conversation_id, user)
+        state = initial_state(payload.question, history, stream_tokens=True, request_id=str(conversation_id))
+        yield from _agent_stream_events(state)
+        write_audit(payload.question, state["source_used"], state.get("trace", []), state["answer"])
+        saved = append_turn(history, payload.question, state["answer"]) if state["answer"] else [*history, HumanMessage(content=payload.question)]
+        save_conversation(conversation_id, saved, user)
+        audited = True
+        logger.info(
+            "Chat stream completed conversation_id=%s source=%s tool_calls=%d duration_ms=%d",
+            conversation_id, state["source_used"], state["tool_call_count"], int((perf_counter() - started_at) * 1000),
+        )
+        CHAT_REQUESTS.labels(state["source_used"], "ok").inc()
+        done = ChatDoneEvent(
+            type="done", conversation_id=conversation_id, answer=state["answer"],
+            source_used=state["source_used"], citations=state.get("citations", []),
+            retrieval_query=state.get("current_query", payload.question),
+        )
+        yield _sse(done.model_dump(mode="json"))
+    except RedisError:
+        CHAT_REQUESTS.labels("", "error").inc()
+        logger.exception("Conversation memory is unavailable")
+        yield _sse({"type": "error", "conversation_id": str(conversation_id), "message": CONVERSATION_MEMORY_UNAVAILABLE})
+    except Exception:
+        CHAT_REQUESTS.labels("", "error").inc()
+        logger.exception("Streaming chat failed")
+        yield _sse({"type": "error", "conversation_id": str(conversation_id), "message": "The assistant could not complete this request. Please try again."})
+    finally:
+        if not audited:
+            logger.info(
+                "Chat stream ended before completion conversation_id=%s duration_ms=%d",
+                conversation_id, int((perf_counter() - started_at) * 1000),
+            )
+            _audit_partial_stream(payload.question, state)
+
+
+def _agent_stream_events(state):
+    emitted = 0
+    for mode, chunk in agent_graph.stream(state, stream_mode=["updates", "custom"]):
+        if mode == "custom":
+            if chunk.get("type") == "token":
+                yield _sse({"type": "token", "text": chunk["text"]})
+            continue
+        for node, delta in chunk.items():
+            state.update(delta)
+            trace = state.get("trace", [])
+            for line in trace[emitted:]:
+                yield _sse({"type": "trace", "node": node, "text": line})
+            emitted = len(trace)
+
+
+def _audit_partial_stream(question, state):
+    # Client disconnects can occur mid-stream; retain a completed answer's audit record.
+    if state.get("answer"):
+        write_audit(question, state.get("source_used", ""), state.get("trace", []), state["answer"])
 
 
 
@@ -322,33 +284,33 @@ async def ingest(
     dest = (upload_dir / f"{uuid4().hex}{suffix}").resolve()
     if dest.parent != upload_dir:
         raise HTTPException(status_code=400, detail="Invalid upload destination")
-
     if settings.ingest_mode == "queue":
-        saved = False
-        try:
-            await _save_upload(file, dest)
-            saved = True
-            await run_in_threadpool(_validate_upload_content, dest, suffix)
-            job_id = await run_in_threadpool(create_job, original_filename, str(dest))
-        except RedisError as exc:
-            if saved:
-                await _remove_upload(dest)
-            INGEST_REQUESTS.labels("error").inc()
-            logger.exception("Could not enqueue ingestion job file=%s", dest.name)
-            raise HTTPException(
-                status_code=503,
-                detail="The ingestion queue is unavailable. Please try again.",
-            ) from exc
-        except Exception:
-            if saved:
-                await _remove_upload(dest)
-            raise
-        INGEST_REQUESTS.labels("queued").inc()
-        return JSONResponse(
-            status_code=202,
-            content={"job_id": job_id, "status": "queued", "file": original_filename},
-        )
+        return await _queue_upload(file, dest, suffix, original_filename)
+    return await _index_upload(file, dest, suffix, original_filename)
 
+
+async def _queue_upload(file, dest, suffix, original_filename):
+    saved = False
+    try:
+        await _save_upload(file, dest)
+        saved = True
+        await run_in_threadpool(_validate_upload_content, dest, suffix)
+        job_id = await run_in_threadpool(create_job, original_filename, str(dest))
+    except RedisError as exc:
+        if saved:
+            await _remove_upload(dest)
+        INGEST_REQUESTS.labels("error").inc()
+        logger.exception("Could not enqueue ingestion job file=%s", dest.name)
+        raise HTTPException(status_code=503, detail="The ingestion queue is unavailable. Please try again.") from exc
+    except Exception:
+        if saved:
+            await _remove_upload(dest)
+        raise
+    INGEST_REQUESTS.labels("queued").inc()
+    return JSONResponse(status_code=202, content={"job_id": job_id, "status": "queued", "file": original_filename})
+
+
+async def _index_upload(file, dest, suffix, original_filename):
     saved = False
     try:
         await _save_upload(file, dest)
@@ -370,10 +332,7 @@ async def ingest(
         if saved:
             await _remove_upload(dest)
         INGEST_REQUESTS.labels("error").inc()
-        raise HTTPException(
-            status_code=500,
-            detail="The document could not be indexed. Please try again.",
-        ) from exc
+        raise HTTPException(status_code=500, detail="The document could not be indexed. Please try again.") from exc
     await _remove_upload(dest)
     INGEST_REQUESTS.labels("indexed").inc()
     return {"message": "Document indexed", "file": original_filename, "chunks": chunks, "ids_created": len(ids)}
@@ -388,7 +347,7 @@ def ingest_job(
     try:
         job = get_job(job_id)
     except RedisError as exc:
-        logger.exception("Could not read ingestion job %s", job_id)
+        logger.exception("Could not read ingestion job")
         raise HTTPException(
             status_code=503,
             detail="Ingestion status is unavailable. Please try again.",

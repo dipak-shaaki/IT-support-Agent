@@ -270,7 +270,7 @@ export function ChatPage() {
                     </div>
                   </article>
                 ))}
-                {historyError && <p className="history-error" role="status">{historyError}</p>}
+                {historyError && <output className="history-error" aria-live="polite">{historyError}</output>}
                 <div ref={endOfMessages} />
               </section>
             )}
@@ -286,7 +286,7 @@ export function ChatPage() {
               </details>
             )}
             {historyError && messages.length === 0 && (
-              <p className="history-error" role="status">{historyError}</p>
+              <output className="history-error" aria-live="polite">{historyError}</output>
             )}
             <form className="composer" onSubmit={handleSubmit}>
               <textarea

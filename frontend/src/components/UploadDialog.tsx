@@ -66,10 +66,10 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+    <div className="modal-backdrop" onMouseDown={(event) => {
       if (event.target === event.currentTarget && !busy) onClose()
     }}>
-      <section className="upload-dialog" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+      <dialog open className="upload-dialog" aria-modal="true" aria-labelledby="upload-title">
         <button className="icon-button dialog-close" type="button" onClick={onClose} aria-label="Close upload dialog">
           <X size={18} />
         </button>
@@ -100,17 +100,17 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             required
           />
           {status && (
-            <div className={`form-status ${status.kind}`} role="status">
+            <output className={`form-status ${status.kind}`} aria-live="polite">
               {status.kind === 'success' && <CheckCircle2 size={16} />}
               <span>{status.text}</span>
-            </div>
+            </output>
           )}
           <button className="button button-primary upload-submit" type="submit" disabled={busy}>
             {busy ? <><LoaderCircle className="spin" size={16} /> Indexing…</> : 'Upload and index'}
           </button>
         </form>
         <p className="dialog-footnote">The admin key is stored only for this browser session.</p>
-      </section>
+      </dialog>
     </div>
   )
 }
