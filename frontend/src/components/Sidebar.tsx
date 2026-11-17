@@ -3,7 +3,9 @@ import { Activity, FilePlus2, Sparkles, Upload } from 'lucide-react'
 import { Brand } from './Brand'
 import { UploadDialog } from './UploadDialog'
 
-export function Sidebar({ active = 'chat' }: { active?: 'chat' | 'dashboard' }) {
+export function Sidebar({
+  active = 'chat',
+}: Readonly<{ active?: 'chat' | 'dashboard' }>) {
   const [uploadOpen, setUploadOpen] = useState(false)
 
   return (

@@ -17,7 +17,9 @@ async function waitForJob(jobId: string, adminKey: string) {
   throw new Error('Indexing is still running. Check back in a few minutes.')
 }
 
-export function UploadDialog({ onClose }: { onClose: () => void }) {
+export function UploadDialog({
+  onClose,
+}: Readonly<{ onClose: () => void }>) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [adminKey, setAdminKey] = useState(readAdminKey)
   const [busy, setBusy] = useState(false)
@@ -66,9 +68,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => {
-      if (event.target === event.currentTarget && !busy) onClose()
-    }}>
+    <div className="modal-backdrop">
       <dialog open className="upload-dialog" aria-modal="true" aria-labelledby="upload-title">
         <button className="icon-button dialog-close" type="button" onClick={onClose} aria-label="Close upload dialog">
           <X size={18} />

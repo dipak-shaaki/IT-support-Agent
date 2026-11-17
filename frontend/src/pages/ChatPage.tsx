@@ -114,7 +114,7 @@ export function ChatPage() {
             answer += token
             setMessages((items) => {
               const next = [...items]
-              const last = next[next.length - 1]
+              const last = next.at(-1)
               if (last?.role === 'assistant') {
                 next[next.length - 1] = { ...last, content: answer }
               }
@@ -132,7 +132,7 @@ export function ChatPage() {
               : '')
             setMessages((items) => {
               const next = [...items]
-              const last = next[next.length - 1]
+              const last = next.at(-1)
               if (last?.role === 'assistant') {
                 if (!eventDone.answer) return next.slice(0, -1)
                 next[next.length - 1] = {
@@ -154,7 +154,7 @@ export function ChatPage() {
       setSource('Could not complete')
       setMessages((items) => {
         const next = [...items]
-        const last = next[next.length - 1]
+        const last = next.at(-1)
         if (last?.role === 'assistant') {
           next[next.length - 1] = {
             ...last,

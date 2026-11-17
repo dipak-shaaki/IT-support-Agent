@@ -270,13 +270,18 @@ def _evaluate_repetitions(cases, repeats):
 def _evaluate_one(case):
     started = time.perf_counter()
     try:
-        result = _ask_streaming(case["question"])
+        result = ask(case["question"])
         evaluated = evaluate_case(case, result)
         evaluated["llm_calls"] = result.get("llm_metrics", [])
     except Exception as exc:
         logger.exception("Evaluation case %s failed", case["name"])
         evaluated = {"name": case["name"], "passed": False, "error": f"{type(exc).__name__}: {exc}"}
     return evaluated, time.perf_counter() - started
+
+
+def ask(question: str) -> dict[str, Any]:
+    """Evaluate one question through the application's streaming graph path."""
+    return _ask_streaming(question)
 
 
 def _ask_streaming(question: str) -> dict[str, Any]:
@@ -296,27 +301,33 @@ def _ask_streaming(question: str) -> dict[str, Any]:
 
 def _evaluation_summary(cases, results, latencies, repeats, started_at):
     passed = sum(result["passed"] for result in results)
-    source_cases = []
-    tool_cases = []
-    retrieval_cases = []
-    for repetition in range(repeats):
-        start = repetition * len(cases)
-        repeat_results = results[start : start + len(cases)]
-        for case, result in zip(cases, repeat_results):
-            if "expected_source" in case:
-                source_cases.append((case, result))
-            if "expected_tools" in case:
-                tool_cases.append((case, result))
-            if "expected_relevant_sources" in case:
-                retrieval_cases.append((case, result))
+    source_cases, tool_cases, retrieval_cases = _labeled_case_groups(
+        cases, results, repeats
+    )
 
     settings = get_settings()
     llm_calls = [call for result in results for call in result.get("llm_calls", [])]
-    ttft_samples = [call["ttft_seconds"] for call in llm_calls if call.get("ttft_seconds") is not None]
+    ttft_samples = [
+        call["ttft_seconds"]
+        for call in llm_calls
+        if call.get("ttft_seconds") is not None
+    ]
     call_duration_samples = [call["duration_seconds"] for call in llm_calls]
-    generation_samples = [call["generation_seconds"] for call in llm_calls if call.get("generation_seconds") is not None]
-    output_token_samples = [call["output_tokens"] for call in llm_calls if call.get("output_tokens") is not None]
-    tps_samples = [call["tokens_per_second"] for call in llm_calls if call.get("tokens_per_second") is not None]
+    generation_samples = [
+        call["generation_seconds"]
+        for call in llm_calls
+        if call.get("generation_seconds") is not None
+    ]
+    output_token_samples = [
+        call["output_tokens"]
+        for call in llm_calls
+        if call.get("output_tokens") is not None
+    ]
+    tps_samples = [
+        call["tokens_per_second"]
+        for call in llm_calls
+        if call.get("tokens_per_second") is not None
+    ]
     return {
         "passed": passed,
         "total": len(results),
@@ -331,92 +342,135 @@ def _evaluation_summary(cases, results, latencies, repeats, started_at):
             "latency_percentile_method": "nearest_rank",
             "evaluation_transport": "streaming",
         },
-        "metrics": {
-            "source_accuracy": _rate(
-                sum(
-                    result.get("source_used") == case["expected_source"]
-                    for case, result in source_cases
-                ),
-                len(source_cases),
-            ),
-            "tool_selection_accuracy": _rate(
-                sum(
-                    result.get("tools_called", []) == case["expected_tools"]
-                    for case, result in tool_cases
-                ),
-                len(tool_cases),
-            ),
-            "retrieval_precision": _rate(
-                sum(
-                    (result.get("retrieval") or {}).get("precision", 0.0)
-                    for _, result in retrieval_cases
-                ),
-                len(retrieval_cases),
-            ),
-            "retrieval_recall": _rate(
-                sum(
-                    (result.get("retrieval") or {}).get("recall", 0.0)
-                    for _, result in retrieval_cases
-                ),
-                len(retrieval_cases),
-            ),
-            "retrieval_mrr": _rate(
-                sum(
-                    (result.get("retrieval") or {}).get("mrr", 0.0)
-                    for _, result in retrieval_cases
-                ),
-                len(retrieval_cases),
-            ),
-            "retrieval_precision_at_5": _rate(
-                sum(
-                    (result.get("retrieval") or {}).get("precision_at_5", 0.0)
-                    for _, result in retrieval_cases
-                ),
-                len(retrieval_cases),
-            ),
-            "retrieval_recall_at_5": _rate(
-                sum(
-                    (result.get("retrieval") or {}).get("recall_at_5", 0.0)
-                    for _, result in retrieval_cases
-                ),
-                len(retrieval_cases),
-            ),
-            "retrieval_hit_rate_at_5": _rate(
-                sum(
-                    (result.get("retrieval") or {}).get("hit_rate_at_5", 0.0)
-                    for _, result in retrieval_cases
-                ),
-                len(retrieval_cases),
-            ),
-            "retrieval_mrr_at_5": _rate(
-                sum(
-                    (result.get("retrieval") or {}).get("mrr_at_5", 0.0)
-                    for _, result in retrieval_cases
-                ),
-                len(retrieval_cases),
-            ),
-            "retrieval_cases": len(retrieval_cases),
-            "tool_selection_cases": len(tool_cases),
-            "latency_samples": len(latencies),
-            "latency_mean_seconds": _rate(sum(latencies), len(latencies)),
-            "latency_p95_seconds": _percentile(latencies, 0.95),
-            "latency_p99_seconds": _percentile(latencies, 0.99),
-            "llm_call_samples": len(llm_calls),
-            "llm_call_duration_mean_seconds": _rate(sum(call_duration_samples), len(call_duration_samples)),
-            "llm_call_duration_p95_seconds": _percentile(call_duration_samples, 0.95),
-            "llm_ttft_samples": len(ttft_samples),
-            "llm_ttft_mean_seconds": _rate(sum(ttft_samples), len(ttft_samples)),
-            "llm_ttft_p95_seconds": _percentile(ttft_samples, 0.95),
-            "llm_generation_samples": len(generation_samples),
-            "llm_generation_mean_seconds": _rate(sum(generation_samples), len(generation_samples)),
-            "llm_generation_p95_seconds": _percentile(generation_samples, 0.95),
-            "llm_output_token_samples": len(output_token_samples),
-            "llm_output_tokens_mean": _rate(sum(output_token_samples), len(output_token_samples)),
-            "llm_generation_tps_samples": len(tps_samples),
-            "llm_generation_tps_mean": _rate(sum(tps_samples), len(tps_samples)),
-            "llm_generation_tps_p95": _percentile(tps_samples, 0.95),
-        },
+        "metrics": _evaluation_metrics(
+            source_cases,
+            tool_cases,
+            retrieval_cases,
+            latencies,
+            llm_calls,
+            ttft_samples,
+            call_duration_samples,
+            generation_samples,
+            output_token_samples,
+            tps_samples,
+        ),
         "cases": results,
+    }
+
+
+def _labeled_case_groups(cases, results, repeats):
+    source_cases = []
+    tool_cases = []
+    retrieval_cases = []
+    for repetition in range(repeats):
+        start = repetition * len(cases)
+        repeat_results = results[start : start + len(cases)]
+        for case, result in zip(cases, repeat_results):
+            if "expected_source" in case:
+                source_cases.append((case, result))
+            if "expected_tools" in case:
+                tool_cases.append((case, result))
+            if "expected_relevant_sources" in case:
+                retrieval_cases.append((case, result))
+    return source_cases, tool_cases, retrieval_cases
+
+
+def _evaluation_metrics(
+    source_cases,
+    tool_cases,
+    retrieval_cases,
+    latencies,
+    llm_calls,
+    ttft_samples,
+    call_duration_samples,
+    generation_samples,
+    output_token_samples,
+    tps_samples,
+):
+    return {
+        "source_accuracy": _rate(
+            sum(
+                result.get("source_used") == case["expected_source"]
+                for case, result in source_cases
+            ),
+            len(source_cases),
+        ),
+        "tool_selection_accuracy": _rate(
+            sum(
+                result.get("tools_called", []) == case["expected_tools"]
+                for case, result in tool_cases
+            ),
+            len(tool_cases),
+        ),
+        "retrieval_precision": _rate(
+            sum(
+                (result.get("retrieval") or {}).get("precision", 0.0)
+                for _, result in retrieval_cases
+            ),
+            len(retrieval_cases),
+        ),
+        "retrieval_recall": _rate(
+            sum(
+                (result.get("retrieval") or {}).get("recall", 0.0)
+                for _, result in retrieval_cases
+            ),
+            len(retrieval_cases),
+        ),
+        "retrieval_mrr": _rate(
+            sum(
+                (result.get("retrieval") or {}).get("mrr", 0.0)
+                for _, result in retrieval_cases
+            ),
+            len(retrieval_cases),
+        ),
+        "retrieval_precision_at_5": _rate(
+            sum(
+                (result.get("retrieval") or {}).get("precision_at_5", 0.0)
+                for _, result in retrieval_cases
+            ),
+            len(retrieval_cases),
+        ),
+        "retrieval_recall_at_5": _rate(
+            sum(
+                (result.get("retrieval") or {}).get("recall_at_5", 0.0)
+                for _, result in retrieval_cases
+            ),
+            len(retrieval_cases),
+        ),
+        "retrieval_hit_rate_at_5": _rate(
+            sum(
+                (result.get("retrieval") or {}).get("hit_rate_at_5", 0.0)
+                for _, result in retrieval_cases
+            ),
+            len(retrieval_cases),
+        ),
+        "retrieval_mrr_at_5": _rate(
+            sum(
+                (result.get("retrieval") or {}).get("mrr_at_5", 0.0)
+                for _, result in retrieval_cases
+            ),
+            len(retrieval_cases),
+        ),
+        "retrieval_cases": len(retrieval_cases),
+        "tool_selection_cases": len(tool_cases),
+        "latency_samples": len(latencies),
+        "latency_mean_seconds": _rate(sum(latencies), len(latencies)),
+        "latency_p95_seconds": _percentile(latencies, 0.95),
+        "latency_p99_seconds": _percentile(latencies, 0.99),
+        "llm_call_samples": len(llm_calls),
+        "llm_call_duration_mean_seconds": _rate(sum(call_duration_samples), len(call_duration_samples)),
+        "llm_call_duration_p95_seconds": _percentile(call_duration_samples, 0.95),
+        "llm_ttft_samples": len(ttft_samples),
+        "llm_ttft_mean_seconds": _rate(sum(ttft_samples), len(ttft_samples)),
+        "llm_ttft_p95_seconds": _percentile(ttft_samples, 0.95),
+        "llm_generation_samples": len(generation_samples),
+        "llm_generation_mean_seconds": _rate(sum(generation_samples), len(generation_samples)),
+        "llm_generation_p95_seconds": _percentile(generation_samples, 0.95),
+        "llm_output_token_samples": len(output_token_samples),
+        "llm_output_tokens_mean": _rate(sum(output_token_samples), len(output_token_samples)),
+        "llm_generation_tps_samples": len(tps_samples),
+        "llm_generation_tps_mean": _rate(sum(tps_samples), len(tps_samples)),
+        "llm_generation_tps_p95": _percentile(tps_samples, 0.95),
     }
 
 

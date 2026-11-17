@@ -242,13 +242,13 @@ function MetricCard({
   value,
   note,
   accent,
-}: {
+}: Readonly<{
   icon: ReactNode
   label: string
   value: string
   note: string
   accent: string
-}) {
+}>) {
   return (
     <article className="metric-card">
       <div className={`metric-icon ${accent}`}>{icon}</div>
@@ -263,11 +263,11 @@ function SectionHeading({
   icon,
   title,
   subtitle,
-}: {
+}: Readonly<{
   icon: ReactNode
   title: string
   subtitle: string
-}) {
+}>) {
   return (
     <div className="section-heading">
       <div className="section-heading-icon">{icon}</div>
@@ -276,7 +276,7 @@ function SectionHeading({
   )
 }
 
-function EmptyState({ text }: { text: string }) {
+function EmptyState({ text }: Readonly<{ text: string }>) {
   return <div className="chart-empty">{text}</div>
 }
 

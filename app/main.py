@@ -153,11 +153,17 @@ def frontend_page() -> FileResponse:
     return FileResponse(FRONTEND_INDEX)
 
 
-@app.get("/")
+@app.get(
+    "/",
+    responses={503: {"description": "Frontend build is missing"}},
+)
 def home() -> FileResponse:
     return frontend_page()
 
 
-@app.get("/dashboard")
+@app.get(
+    "/dashboard",
+    responses={503: {"description": "Frontend build is missing"}},
+)
 def dashboard() -> FileResponse:
     return frontend_page()

@@ -1,7 +1,6 @@
 import argparse
 import json
 import random
-import re
 from pathlib import Path
 
 # --------------------------------------------------
@@ -23,14 +22,23 @@ def extract_metadata(text):
     metadata = {}
 
     for line in text.splitlines():
-        match = re.match(r"^\s*-\s*([^:]+):\s*(.*)", line)
-
-        if match:
-            key = match.group(1).strip()
-            value = match.group(2).strip()
-            metadata[key] = value
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            key, separator, value = stripped[2:].partition(":")
+            if separator:
+                key = key.strip()
+                value = value.strip()
+                metadata[key] = value
 
     return metadata
+
+
+def _is_record_heading(line):
+    parts = line.strip().split()
+    if len(parts) != 2 or parts[0] != "##":
+        return False
+    prefix, separator, number = parts[1].partition("-")
+    return bool(separator and prefix.isalpha() and prefix.isupper() and number.isdigit())
 
 
 # --------------------------------------------------
@@ -38,19 +46,42 @@ def extract_metadata(text):
 # --------------------------------------------------
 
 def extract_section(text, heading, next_heading=None):
-    pattern = rf"(?ms)^###\s+{re.escape(heading)}\s*$\n(.*?)"
-
-    if next_heading:
-        pattern += rf"(?=^###\s+{re.escape(next_heading)}\s*$|\Z)"
-    else:
-        pattern += r"(?=\Z)"
-
-    match = re.search(pattern, text)
-
-    if not match:
+    lines = text.splitlines()
+    heading_line = f"### {heading}"
+    start = next(
+        (index for index, line in enumerate(lines) if line.strip() == heading_line),
+        None,
+    )
+    if start is None:
         return ""
 
-    return match.group(1).strip().strip("-").strip()
+    end = len(lines)
+    if next_heading:
+        next_heading_line = f"### {next_heading}"
+        end = next(
+            (
+                index
+                for index in range(start + 1, len(lines))
+                if lines[index].strip() == next_heading_line
+            ),
+            len(lines),
+        )
+    return "\n".join(lines[start + 1 : end]).strip().strip("-").strip()
+
+
+def _remove_metadata_section(lines):
+    result = []
+    skip_metadata = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "### Metadata":
+            skip_metadata = True
+            continue
+        if skip_metadata and stripped.startswith("### "):
+            skip_metadata = False
+        if not skip_metadata:
+            result.append(line)
+    return result
 
 
 # --------------------------------------------------
@@ -74,27 +105,19 @@ def parse_record(block, file_path, index):
     # Handle records without a ### Question heading.
     # Example: question text appears before ### Answer.
     if not question and answer:
-        before_answer = re.split(
-            r"(?m)^###\s+Answer\s*$",
-            block,
-            maxsplit=1
-        )[0]
-
-        # Remove metadata section if present
-        before_answer = re.sub(
-            r"(?ms)^###\s+Metadata\s*\n.*?(?=(?:^###\s|\Z))",
-            "",
-            before_answer
+        lines = block.splitlines()
+        answer_heading = next(
+            (
+                index
+                for index, line in enumerate(lines)
+                if line.strip() == "### Answer"
+            ),
+            len(lines),
         )
-
-        # Remove record ID heading
-        before_answer = re.sub(
-            r"(?m)^##\s+[A-Z]+-\d+\s*$",
-            "",
-            before_answer
-        )
-
-        question = before_answer.strip()
+        question_lines = _remove_metadata_section(lines[:answer_heading])
+        question = "\n".join(
+            line for line in question_lines if not _is_record_heading(line)
+        ).strip()
 
     if not question or not answer:
         return None
@@ -130,12 +153,20 @@ def load_dataset(input_dir):
 
     for file_path in markdown_files:
         content = file_path.read_text(encoding="utf-8")
-
-        # Split when a new record starts, e.g. ## IT-00005
-        blocks = re.split(
-            r"(?m)(?=^##\s+[A-Z]+-\d+\s*$)",
-            content
-        )
+        lines = content.splitlines(keepends=True)
+        record_starts = [
+            index for index, line in enumerate(lines) if _is_record_heading(line)
+        ]
+        if not record_starts:
+            blocks = [content]
+        else:
+            starts = [0, *record_starts]
+            ends = [*record_starts, len(lines)]
+            blocks = [
+                "".join(lines[start:end])
+                for start, end in zip(starts, ends)
+                if start < end
+            ]
 
         for index, block in enumerate(blocks, start=1):
             if not block.strip():

@@ -58,7 +58,10 @@ def health():
     return {"status": "ok", "service": settings.app_name}
 
 
-@router.get("/ready")
+@router.get(
+    "/ready",
+    responses={503: {"description": "Required services are unavailable"}},
+)
 def ready(response: Response):
     checks = {}
     try:
@@ -79,7 +82,10 @@ def ready(response: Response):
     return {"status": "ready" if is_ready else "not_ready", "checks": checks}
 
 
-@router.get("/conversations/{conversation_id}")
+@router.get(
+    "/conversations/{conversation_id}",
+    responses={503: {"description": "Conversation memory is unavailable"}},
+)
 def get_conversation(
     conversation_id: UUID,
     user: str | None = Depends(current_user),
@@ -118,7 +124,14 @@ def stats(_: None = Depends(require_admin)):
     }
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    responses={
+        500: {"description": "The assistant could not complete the request"},
+        503: {"description": "Conversation memory is unavailable"},
+    },
+)
 def chat(
     payload: ChatRequest,
     user: str | None = Depends(current_user),
@@ -274,7 +287,17 @@ def _audit_partial_stream(question, state):
 
 
 
-@router.post("/ingest")
+@router.post(
+    "/ingest",
+    responses={
+        202: {"description": "Upload queued for background indexing"},
+        400: {"description": "Unsupported file or invalid upload destination"},
+        413: {"description": "Upload exceeds the configured size limit"},
+        422: {"description": "Uploaded document contains no indexable content"},
+        500: {"description": "Document indexing failed"},
+        503: {"description": "Ingestion queue is unavailable"},
+    },
+)
 async def ingest(
     _: None = Depends(require_ingestion_enabled),
     file: UploadFile = File(...),
@@ -344,7 +367,13 @@ async def _index_upload(file, dest, suffix, original_filename):
     return {"message": "Document indexed", "file": original_filename, "chunks": chunks, "ids_created": len(ids)}
 
 
-@router.get("/ingest/jobs/{job_id}")
+@router.get(
+    "/ingest/jobs/{job_id}",
+    responses={
+        404: {"description": "Ingestion job not found"},
+        503: {"description": "Ingestion status is unavailable"},
+    },
+)
 def ingest_job(
     job_id: str,
     _: None = Depends(require_ingestion_enabled),

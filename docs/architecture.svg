@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 620" role="img" aria-labelledby="title description">
+  <title id="title">IT Support Agent architecture</title>
+  <desc id="description">React chat sends requests to FastAPI and a LangGraph agent. The agent uses Groq and retrieves from Pinecone plus local BM25. Live service status checks use Tavily after private retrieval. Redis stores conversations, SQLite stores audit records, and Prometheus exposes metrics.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0 0 L9 4.5 L0 9 Z" fill="#587565"/>
+    </marker>
+    <style>
+      text { font-family: Inter, ui-sans-serif, system-ui, sans-serif; fill: #24382c; }
+      .title { font-size: 24px; font-weight: 700; }
+      .label { font-size: 15px; font-weight: 650; }
+      .small { font-size: 12px; fill: #596b60; }
+      .box { fill: #fff; stroke: #b9cbbd; stroke-width: 1.5; rx: 12; }
+      .primary { fill: #edf5ef; stroke: #7ea68a; }
+      .infra { fill: #f5f7f5; stroke: #ccd6ce; }
+      .arrow { fill: none; stroke: #587565; stroke-width: 2; marker-end: url(#arrow); }
+      .dashed { stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+
+  <rect width="1100" height="620" fill="#fbfcfa"/>
+  <text x="44" y="48" class="title">IT Support Agent</text>
+  <text x="44" y="72" class="small">Private-KB-grounded answers, controlled web fallback, streaming UI</text>
+
+  <rect x="42" y="112" width="190" height="94" class="box primary"/>
+  <text x="137" y="151" text-anchor="middle" class="label">React UI</text>
+  <text x="137" y="176" text-anchor="middle" class="small">Chat · dashboard · uploads</text>
+
+  <rect x="286" y="112" width="190" height="94" class="box"/>
+  <text x="381" y="151" text-anchor="middle" class="label">FastAPI</text>
+  <text x="381" y="176" text-anchor="middle" class="small">REST · SSE · auth · limits</text>
+
+  <rect x="534" y="98" width="244" height="124" class="box primary"/>
+  <text x="656" y="135" text-anchor="middle" class="label">LangGraph agent</text>
+  <text x="656" y="160" text-anchor="middle" class="small">Greeting / feedback → direct</text>
+  <text x="656" y="181" text-anchor="middle" class="small">IT question → private KB first</text>
+  <text x="656" y="202" text-anchor="middle" class="small">Status question → KB, then web</text>
+
+  <rect x="858" y="112" width="190" height="94" class="box"/>
+  <text x="953" y="151" text-anchor="middle" class="label">Groq LLM</text>
+  <text x="953" y="176" text-anchor="middle" class="small">Tool calls · streamed answer</text>
+
+  <path d="M232 159 H286" class="arrow"/>
+  <text x="259" y="145" text-anchor="middle" class="small">SSE / JSON</text>
+  <path d="M476 159 H534" class="arrow"/>
+  <path d="M778 159 H858" class="arrow"/>
+  <text x="818" y="145" text-anchor="middle" class="small">prompt / response</text>
+
+  <rect x="534" y="285" width="244" height="86" class="box primary"/>
+  <text x="656" y="321" text-anchor="middle" class="label">Hybrid retriever</text>
+  <text x="656" y="346" text-anchor="middle" class="small">Pinecone + BM25 → RRF top-k</text>
+  <path d="M656 222 V285" class="arrow"/>
+  <text x="671" y="260" class="small">search_private_kb</text>
+
+  <rect x="286" y="423" width="190" height="78" class="box infra"/>
+  <text x="381" y="455" text-anchor="middle" class="label">FastEmbed</text>
+  <text x="381" y="479" text-anchor="middle" class="small">Local query embeddings</text>
+
+  <rect x="534" y="423" width="190" height="78" class="box infra"/>
+  <text x="629" y="455" text-anchor="middle" class="label">Pinecone</text>
+  <text x="629" y="479" text-anchor="middle" class="small">Vector index</text>
+
+  <rect x="824" y="423" width="190" height="78" class="box infra"/>
+  <text x="919" y="455" text-anchor="middle" class="label">Local BM25</text>
+  <text x="919" y="479" text-anchor="middle" class="small">Keyword corpus</text>
+
+  <path d="M590 371 C560 397 455 394 410 423" class="arrow"/>
+  <path d="M656 371 V423" class="arrow"/>
+  <path d="M720 350 C810 365 870 385 906 423" class="arrow"/>
+  <path d="M534 462 H476" class="arrow"/>
+  <text x="505" y="449" text-anchor="middle" class="small">embeddings</text>
+
+  <rect x="42" y="423" width="190" height="78" class="box primary"/>
+  <text x="137" y="455" text-anchor="middle" class="label">Tavily</text>
+  <text x="137" y="479" text-anchor="middle" class="small">Live status only</text>
+  <path d="M534 202 C420 267 242 285 156 423" class="arrow dashed"/>
+  <text x="327" y="304" text-anchor="middle" class="small">status fallback after KB</text>
+
+  <rect x="286" y="536" width="190" height="56" class="box infra"/>
+  <text x="381" y="570" text-anchor="middle" class="label">Redis · conversations</text>
+  <rect x="534" y="536" width="190" height="56" class="box infra"/>
+  <text x="629" y="570" text-anchor="middle" class="label">SQLite · audit</text>
+  <rect x="824" y="536" width="190" height="56" class="box infra"/>
+  <text x="919" y="570" text-anchor="middle" class="label">Prometheus · metrics</text>
+  <path d="M381 206 V536" class="arrow dashed"/>
+  <path d="M570 222 C566 353 592 437 615 536" class="arrow dashed"/>
+  <path d="M742 222 C804 324 886 413 914 536" class="arrow dashed"/>
+</svg>

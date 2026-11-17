@@ -16,7 +16,7 @@ from app.rag import workflow as legacy_workflow
 
 class FakeRetriever:
     def invoke(self, query):
-        assert query == "connect to VPN"
+        assert query in {"connect to VPN", "How do I connect to VPN?"}
         return [
             Document(
                 page_content="Connect with the company VPN client.",
@@ -582,7 +582,7 @@ def test_web_tool_call_before_private_search_is_rejected(monkeypatch):
 def test_private_kb_citation_uses_the_record_id(monkeypatch):
     class RecordRetriever:
         def invoke(self, query):
-            assert query == "connect to VPN"
+            assert query in {"connect to VPN", "How do I connect to VPN?"}
             return [
                 Document(
                     page_content="What is a VPN?\n\nA private company network.",

@@ -1,7 +1,7 @@
 export type Citation = {
   title: string
   url: string
-  type: 'private_kb' | 'web' | string
+  type: 'private_kb' | 'web'
 }
 
 export type ConversationMessage = {

@@ -152,6 +152,13 @@ def call_agent(state: AgentState):
         for call in response.tool_calls:
             if call["name"] in {tool.name for tool in tools}:
                 query = call.get("args", {}).get("query", "")
+                if (
+                    call["name"] == search_private_kb.name
+                    and state["private_kb_searched"]
+                    and query.strip().casefold()
+                    == state["current_query"].strip().casefold()
+                ):
+                    continue
                 trace = [*trace, f"Tool call → {call['name']}({query})"]
     update = {"messages": [response], "trace": trace}
     if state["stream_tokens"]:
@@ -236,11 +243,47 @@ def execute_tools(state: AgentState):
     if unavailable:
         raise ValueError(f"Model requested unavailable tools: {', '.join(sorted(unavailable))}")
 
-    result = ToolNode(tools).invoke({"messages": [response]})
-    results_by_id = {message.tool_call_id: message for message in result["messages"]}
-    updates = _process_tool_results(response.tool_calls, results_by_id, state)
+    previous_kb_result = next(
+        (
+            message
+            for message in reversed(state["messages"])
+            if isinstance(message, ToolMessage)
+            and message.name == search_private_kb.name
+        ),
+        None,
+    )
+    cached_calls = {
+        call["id"]
+        for call in response.tool_calls
+        if (
+            state["private_kb_searched"]
+            and previous_kb_result is not None
+            and call["name"] == search_private_kb.name
+            and call.get("args", {}).get("query", "").strip().casefold()
+            == state["current_query"].strip().casefold()
+        )
+    }
+    calls_to_run = [
+        call for call in response.tool_calls if call["id"] not in cached_calls
+    ]
+    results_by_id = {}
+    if calls_to_run:
+        execution_response = response.model_copy(update={"tool_calls": calls_to_run})
+        result = ToolNode(tools).invoke({"messages": [execution_response]})
+        results_by_id.update(
+            {message.tool_call_id: message for message in result["messages"]}
+        )
+    for call in response.tool_calls:
+        if call["id"] in cached_calls:
+            results_by_id[call["id"]] = ToolMessage(
+                content=previous_kb_result.content,
+                name=search_private_kb.name,
+                tool_call_id=call["id"],
+            )
+    result_messages = [results_by_id[call["id"]] for call in response.tool_calls]
+    updates = _process_tool_results(calls_to_run, results_by_id, state)
     return {
-        "messages": result["messages"],
+        "messages": result_messages,
         "tool_call_count": state["tool_call_count"] + len(response.tool_calls),
         **updates,
     }

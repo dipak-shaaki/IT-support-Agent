@@ -269,7 +269,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .dashboard-empty { display: grid; min-height: 360px; align-content: center; justify-items: center; padding: 30px; border: 1px dashed #dfe7df; border-radius: 14px; background: rgb(255 255 255 / 55%); text-align: center; }
 .empty-illustration { display: grid; width: 52px; height: 52px; margin-bottom: 14px; place-items: center; border-radius: 15px; color: #578066; background: #edf5ef; }
 .dashboard-empty h2 { margin: 0 0 8px; color: #384a3e; font-size: 16px; }
-.dashboard-empty p { max-width: 360px; margin: 0; color: #87928a; font-size: 11px; line-height: 1.7; }
+.dashboard-empty p { max-width: 360px; margin: 0; color: #68756d; font-size: 11px; line-height: 1.7; }
 
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -329,6 +329,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root * { scroll-behavior: auto; animation-duration: .01ms; animation-iteration-count: 1; transition-duration: .01ms; }
-  :root *::before, :root *::after { animation-duration: .01ms; animation-iteration-count: 1; transition-duration: .01ms; }
+  :root *, :root *::before, :root *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
 }

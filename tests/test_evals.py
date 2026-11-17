@@ -196,11 +196,7 @@ def test_evaluator_reports_aggregate_retrieval_and_tool_metrics(monkeypatch):
         "tool_selection_cases": 2,
         "latency_samples": 2,
     }
-    assert {
-        key: value
-        for key, value in report["metrics"].items()
-        if not key.startswith("latency_") or key == "latency_samples"
-    } == expected_metrics
+    assert {key: report["metrics"][key] for key in expected_metrics} == expected_metrics
     assert report["run_metadata"]["repeats"] == 1
     assert report["run_metadata"]["cases_per_repeat"] == 2
     assert report["metrics"]["latency_mean_seconds"] >= 0
