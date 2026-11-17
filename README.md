@@ -26,58 +26,39 @@ private KB before the public web, and ingestion that keeps both indexes in sync.
   SQLite audit trail with knowledge-gap detection, Prometheus metrics, rate
   limiting, PII redaction before web search, and production config guards.
 
-## Architecture
+## Architecture: request to answer
 
 ```mermaid
 flowchart LR
-    Client["API client"] -->|"POST /api/chat/stream"| API["FastAPI"]
-    API --> Guard["Auth · rate limit · validation"]
-    Guard --> Agent["LangGraph agent"]
-
-    Agent -->|"search_private_kb"| Hybrid["Hybrid retriever"]
-    Hybrid --> Vector["Pinecone<br/>MiniLM 384d"]
-    Hybrid --> BM25["BM25L corpus"]
-    Vector --> RRF["Reciprocal-rank fusion<br/>k = 40"]
-    BM25 --> RRF
-    RRF --> Agent
-
-    Agent -->|"search_web (status only)"| Web["Tavily"]
-    Agent --> LLM["Groq → Gemini → OpenAI"]
-    LLM --> Agent
-    Agent --> API
-    API -->|"SSE: tokens, trace, citations"| Client
-
-    API --> Redis[("Redis<br/>history · jobs · limits")]
-    API --> DB[("SQLite<br/>audit · gaps")]
-    API --> Metrics["/metrics"]
+    Q["User query"] --> API["FastAPI<br/>auth · rate limit · validation"]
+    API --> Agent["LangGraph agent"]
+    Agent --> KB["Private KB tool<br/>Pinecone + BM25 → RRF"]
+    Agent --> Web["Web tool<br/>Tavily · status only"]
+    KB --> Agent
+    Web --> Agent
+    Agent --> LLM["LLM<br/>Groq → Gemini → OpenAI"]
+    LLM --> Out["Answer<br/>tokens · citations · trace"]
 ```
 
-The backend owns the whole request path. A client only needs to POST a question
-and read the server-sent event stream; there is no server-side session state
-outside Redis.
+One request, start to end:
+
+1. The query is validated (length and token limits), authenticated, and rate
+   limited.
+2. The LangGraph agent decides whether retrieval is needed.
+3. IT questions call the private KB tool; current service-status questions must
+   call the private KB first, then Tavily.
+4. The chosen LLM answers from the returned evidence, with provider fallback.
+5. The answer is returned with citations and a step-by-step trace, streamed as
+   server-sent events when `/api/chat/stream` is used.
+
+Conversation history lives in Redis, audit records in SQLite, and metrics are
+exposed at `/metrics`.
 
 ## The RAG pipeline
 
-### 1. Ingestion: one chunk identity, two indexes
+Two paths matter: getting documents in, and getting the right chunks out.
 
-```mermaid
-flowchart LR
-    subgraph Ingest["Ingestion"]
-        File["PDF · DOCX · TXT · MD"] --> Parse["Parse<br/>Q&A-aware for Markdown"]
-        Parse --> Chunk["Chunk<br/>1400/150 chars<br/>Q&A 2500/200 + question"]
-        Chunk --> Embed["FastEmbed MiniLM<br/>384 dimensions"]
-        Embed --> Pine[("Pinecone<br/>cosine · serverless")]
-        Chunk --> Corpus[("BM25L corpus<br/>JSONL")]
-    end
-
-    subgraph Query["Retrieval"]
-        Q["Question"] --> Dense["Vector search<br/>candidate_k"]
-        Q --> Sparse["BM25L search<br/>candidate_k"]
-        Dense --> Fuse["RRF fusion"]
-        Sparse --> Fuse
-        Fuse --> TopK["Dedupe + top_k"]
-    end
-```
+**Indexing:** `documents → parse → chunk → embed → Pinecone + BM25 corpus`
 
 Every chunk gets a stable key derived from its source and byte offset
 (`source#start_index`). That key is what lets the vector index and the BM25
@@ -98,13 +79,7 @@ comparison of two unrelated result sets.
 - **Vector store.** Pinecone serverless, cosine metric. The index is created on
   demand, and a dimension mismatch raises instead of deleting a live index.
 
-### 2. Retrieval: dense + sparse, fused once
-
-```text
-query ──► Pinecone top candidate_k ─┐
-                                    ├─► dedupe by content ─► RRF ─► top_k
-query ──► BM25L top candidate_k ────┘
-```
+**Retrieval:** `question → Pinecone top candidate_k + BM25L top candidate_k → dedupe → RRF → top_k`
 
 - `candidate_k = max(top_k * 2, 10)` per retriever.
 - Reciprocal-rank fusion scores each chunk as `1 / (40 + rank)` summed across
@@ -117,9 +92,7 @@ query ──► BM25L top candidate_k ────┘
 - If the BM25 corpus is empty, retrieval degrades to vector-only with a warning
   instead of failing the request.
 
-### 3. Keeping the indexes consistent
-
-Ingestion is an upsert of a whole source, not an append:
+**Index consistency.** Ingestion is an upsert of a whole source, not an append:
 
 1. New chunks are embedded and written with a fresh `ingestion_id`.
 2. Previous vectors for that source are deleted with a Pinecone metadata filter
@@ -134,46 +107,23 @@ Docker build regenerates it from `data/sample_kb/`.
 
 ## Agent workflow
 
-```mermaid
-flowchart TD
-    Start((start)) --> Route{"route_initial_state"}
-    Route -->|"acknowledgment loop"| Guard["followup_guard"]
-    Route -->|"greeting / feedback"| Agent["agent"]
-    Route -->|"IT question"| Prefetch["prefetch_private_kb"]
-    Prefetch --> Agent
+`question → route → prefetch / agent loop → tools → finalize → answer`
 
-    Agent -->|"tool calls"| Tools["execute_tools"]
-    Agent -->|"status question, KB not searched"| MKB["mandatory_private_search"]
-    Agent -->|"status question, KB searched"| MWeb["mandatory_web_search"]
-    MKB --> Tools
-    MWeb --> Tools
-    Tools --> Agent
-
-    Agent -->|"no tool calls"| Finalize["finalize<br/>source + citations + trace"]
-    Route -->|"repetitive acknowledgments"| Guard
-    Finalize --> Done((end))
-    Guard --> Done
-```
-
-Design decisions worth knowing:
-
-- **Deterministic prefetch.** For a normal IT question the graph runs
-  `search_private_kb` before the model speaks, saving one model round-trip that
-  would otherwise only produce a tool call.
-- **Mandatory evidence order.** A current-status question ("is VPN down?") is
-  forced through private KB first and web second. The model cannot skip ahead to
-  the public web, and `search_web` is only exposed after the private search.
-- **Non-retrieval turns.** Greetings, acknowledgments, and answer-quality
-  feedback skip retrieval; a follow-up like "where did that come from?" reuses
-  the previous substantive question as its search query.
-- **Tool budget.** At most 6 tool calls. When the budget is exhausted or the
-  model requests an unavailable tool, `finalize` answers from the results that
-  already exist rather than failing the request.
-- **Loop guard.** Repeated acknowledgment-only turns are answered directly
-  instead of triggering another model round.
-- **Failover semantics.** Providers are tried in configuration order. A stream
-  that fails after its first token raises instead of retrying, preventing a
-  half-answer from being replayed on top of itself.
+1. **Route.** An IT question goes through a deterministic private-KB prefetch.
+   Greetings and answer feedback skip retrieval. Repeated acknowledgment-only
+   turns are answered by a loop guard instead of another model round.
+2. **Decide.** The agent either calls a tool or answers. If it requests a tool
+   outside the allowed set, the graph moves straight to finalize.
+3. **Enforce evidence order.** A current-status question ("is VPN down?") is
+   forced through private KB first and web second; `search_web` is only exposed
+   after the private search. A follow-up like "where did that come from?" reuses
+   the previous substantive question as its search query.
+4. **Finish.** `finalize` labels the evidence source (`direct`, `private_kb`,
+   `web_search`) and returns the answer, citations, and trace. The loop is
+   capped at 6 tool calls; at the limit it answers from completed results.
+5. **Failover.** Groq is tried first, then Gemini, then OpenAI. A stream that
+   fails after its first token raises instead of retrying, so users never see a
+   duplicated partial answer.
 
 The model sees one system prompt covering scope, evidence rules, prompt-injection
 resistance, secret handling, and response style. Tool output is treated as
