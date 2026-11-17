@@ -235,7 +235,7 @@ data/bm25_corpus.jsonl.tmp
 IMPROVEMENT_PLAN.md
 
 # Evaluation reports
-.evals/reports/
+evals/reports/
 
 # Dependency backups
 pyproject.toml.before-cpu-torch

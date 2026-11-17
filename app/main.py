@@ -13,7 +13,7 @@ from app.api.routes import health, router
 from app.core.config import get_settings, BASE_DIR
 from app.core.logging import configure_logging
 from app.core.metrics import HTTP_DURATION, HTTP_REQUESTS
-from app.rag.vectorstore import get_embeddings
+from app.rag.vectorstore import get_embeddings, get_retriever
 from app.services.audit import init_db
 
 
@@ -33,6 +33,20 @@ async def lifespan(_app: FastAPI):
         settings.embedding_model,
         int((perf_counter() - started_at) * 1000),
     )
+    started_at = perf_counter()
+    logger.info("Warming private KB retrieval path")
+    try:
+        get_retriever().invoke("application startup retrieval warmup")
+    except Exception:
+        logger.warning(
+            "Private KB retrieval warmup failed; first KB request may be slower",
+            exc_info=True,
+        )
+    else:
+        logger.info(
+            "Private KB retrieval path ready duration_ms=%d",
+            int((perf_counter() - started_at) * 1000),
+        )
     yield
 
 
@@ -67,14 +81,21 @@ async def request_context(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    logger.info(
-        "request method=%s path=%s status=%d duration_ms=%d request_id=%s",
-        request.method,
-        request.url.path,
-        response.status_code,
-        int(duration * 1000),
-        request_id,
-    )
+    if request.url.path not in {
+        "/api/chat",
+        "/api/chat/stream",
+        "/health",
+        "/api/health",
+        "/metrics",
+    }:
+        logger.info(
+            "http.request method=%s path=%s status=%d duration_ms=%d request_id=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            int(duration * 1000),
+            request_id,
+        )
     return response
 
 
@@ -85,7 +106,9 @@ def _record_request(request: Request, status: int, duration: float) -> None:
     # Use the route template so IDs do not create unbounded label values.
     path = getattr(route, "path", None) or "unmatched"
     HTTP_REQUESTS.labels(request.method, path, str(status)).inc()
-    HTTP_DURATION.labels(request.method, path).observe(duration)
+    # Streaming middleware returns after response headers, not after the body finishes.
+    if request.url.path != "/api/chat/stream":
+        HTTP_DURATION.labels(request.method, path).observe(duration)
 
 
 @app.get("/metrics")
@@ -97,6 +120,12 @@ def metrics() -> Response:
 @app.get("/health")
 def health_alias():
     return health()
+
+
+# Some local tools probe for an OpenAI-compatible models endpoint.
+@app.get("/v1/models")
+def openai_models():
+    return {"object": "list", "data": []}
 
 
 app.include_router(router)

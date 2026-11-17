@@ -208,7 +208,9 @@ def _chat_stream_events(payload: ChatRequest, user: str | None, conversation_id)
     audited = False
     logger.info(
         "Chat stream started conversation_id=%s question_chars=%d question_tokens=%d",
-        conversation_id, len(payload.question), question_token_count(payload.question),
+        conversation_id,
+        len(payload.question),
+        question_token_count(payload.question),
     )
     try:
         history = load_conversation(conversation_id, user)
@@ -219,8 +221,12 @@ def _chat_stream_events(payload: ChatRequest, user: str | None, conversation_id)
         save_conversation(conversation_id, saved, user)
         audited = True
         logger.info(
-            "Chat stream completed conversation_id=%s source=%s tool_calls=%d duration_ms=%d",
-            conversation_id, state["source_used"], state["tool_call_count"], int((perf_counter() - started_at) * 1000),
+            "Chat stream completed conversation_id=%s source=%s tool_calls=%d llm_calls=%d duration_ms=%d",
+            conversation_id,
+            state["source_used"],
+            state["tool_call_count"],
+            len(state.get("llm_metrics", [])),
+            int((perf_counter() - started_at) * 1000),
         )
         CHAT_REQUESTS.labels(state["source_used"], "ok").inc()
         done = ChatDoneEvent(
@@ -239,7 +245,7 @@ def _chat_stream_events(payload: ChatRequest, user: str | None, conversation_id)
         yield _sse({"type": "error", "conversation_id": str(conversation_id), "message": "The assistant could not complete this request. Please try again."})
     finally:
         if not audited:
-            logger.info(
+            logger.warning(
                 "Chat stream ended before completion conversation_id=%s duration_ms=%d",
                 conversation_id, int((perf_counter() - started_at) * 1000),
             )

@@ -1,7 +1,5 @@
 # IT Service Desk Runbook
 
-> Sample knowledge-base content for this project. Replace it with approved company guidance before using the assistant for real support.
-
 ## Email Troubleshooting
 If a user cannot send or receive email, confirm whether the issue affects one user or many users. Check network connectivity and the service status dashboard. For a single user, sign out and back in, verify mailbox quota, and test the web client. For widespread incidents, do not ask each user to reinstall software; escalate the suspected service incident.
 

@@ -1,13 +1,17 @@
 import json
+import logging
+from time import perf_counter
 
 from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
 
 from app.core.config import get_settings
+from app.core.metrics import RETRIEVAL_DURATION
 from app.core.privacy import redact_pii
 from app.rag.vectorstore import get_retriever
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 _web_search = None
 
 
@@ -29,7 +33,21 @@ def web_search_provider():
 @tool
 def search_private_kb(query: str) -> str:
     """Search the company's private IT knowledge base for policies and support guidance."""
-    documents = get_retriever().invoke(query)
+    started = perf_counter()
+    try:
+        documents = get_retriever().invoke(query)
+    except Exception:
+        duration = perf_counter() - started
+        RETRIEVAL_DURATION.observe(duration)
+        logger.exception("Private KB retrieval failed duration_ms=%.1f", duration * 1000)
+        raise
+    duration = perf_counter() - started
+    RETRIEVAL_DURATION.observe(duration)
+    logger.info(
+        "Private KB retrieval completed duration_ms=%.1f documents=%d",
+        duration * 1000,
+        len(documents),
+    )
     payload = []
     for document in documents:
         item = {

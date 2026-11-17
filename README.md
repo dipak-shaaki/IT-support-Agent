@@ -295,8 +295,14 @@ This makes 135 sequential agent requests; use one repeat first to check credenti
 - **Source accuracy**: fraction of cases routed to the expected answer source.
 - **Tool-selection accuracy**: fraction of labeled cases whose exact tool sequence matches the expected sequence.
 - **Retrieval precision@5, recall@5, hit-rate@5, and MRR@5**: source-file-level metrics for cases with `expected_relevant_sources` labels. Chunks from a file count as one ranked source. Precision@5 uses a fixed denominator of five; recall@5 counts distinct relevant source files found in the first five unique sources. The report also includes the previous all-retrieved-source precision, recall, and MRR.
-- **Latency p95/p99**: per-question elapsed time around `ask()`, including model and tool calls, but excluding app/UI streaming. Percentiles use the nearest-rank method and include failed calls. Repeats include cold-start effects in the first run; inspect per-case timings and use the same setup when comparing results.
+- **Latency p95/p99**: per-question elapsed time around the streaming agent graph, including model and tool calls. Percentiles use the nearest-rank method and include failed calls. Repeats include cold-start effects in the first run; inspect per-case timings and use the same setup when comparing results.
+- **LLM timing**: each case records model/provider, call number, full call duration, TTFT, generation duration, provider-reported output tokens, and TPS when token usage is available. The Prometheus `/metrics` endpoint exposes histograms for call duration, TTFT, generation duration, output tokens, and TPS. Prometheus labels use provider and transport mode only; request IDs and model names remain in logs.
+
+Some streaming provider integrations do not return output-token usage with streamed chunks. In that case the report and logs leave output-token count and TPS unavailable rather than estimating them; TTFT and generation duration are still recorded. Compare those timing measurements with the provider dashboard's token usage for the same requests.
+
 - **Pass rate**: fraction of cases that meet all their specified checks, including answer terms and citation requirements.
+
+At application startup, the service preloads the embedding model and makes a best-effort read-only KB retrieval warm-up. This moves first-use initialization out of the first chat request when Pinecone is available. If warm-up fails, startup continues and logs a warning; the first KB request may then pay the initialization cost.
 
 These are checks over a small, hand-labeled set; answer-term checks are not a semantic faithfulness score or a substitute for human review. The current questions were derived from the sample handbook/runbook and should be reviewed against the intended corpus. Live model and web-search behavior can vary. The benchmark does not calculate Ragas faithfulness or answer relevancy. Keep this live evaluation manual; CI runs offline unit tests and does not call external providers.
 

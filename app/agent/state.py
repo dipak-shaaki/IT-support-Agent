@@ -20,3 +20,4 @@ class AgentState(TypedDict):
     web_searched: bool
     trace: list[str]
     citations: list[dict]
+    llm_metrics: list[dict]

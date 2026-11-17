@@ -1,4 +1,5 @@
 import logging
+from time import perf_counter
 
 from langchain_core.messages import AIMessageChunk
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -6,7 +7,15 @@ from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 
 from app.core.config import get_settings
-from app.core.metrics import LLM_FAILURES
+from app.core.metrics import (
+    LLM_CALLS,
+    LLM_CALL_DURATION,
+    LLM_FAILURES,
+    LLM_GENERATION_DURATION,
+    LLM_OUTPUT_TOKENS,
+    LLM_TOKENS_PER_SECOND,
+    LLM_TTFT,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -35,15 +44,85 @@ def _token_usage(response) -> tuple[int | None, int | None, int | None]:
     return input_tokens, output_tokens, total_tokens
 
 
-def _log_token_usage(provider, response, request_id: str) -> None:
-    usage = _token_usage(response)
-    logger.info(
-        "Model token usage conversation_id=%s provider=%s input_tokens=%s "
-        "output_tokens=%s total_tokens=%s",
-        request_id or "-",
-        type(getattr(provider, "bound", provider)).__name__,
-        *(value if value is not None else "unavailable" for value in usage),
+def _provider_name(provider) -> str:
+    return type(getattr(provider, "bound", provider)).__name__
+
+
+def _model_name(provider) -> str:
+    bound = getattr(provider, "bound", provider)
+    return str(
+        getattr(bound, "model_name", None)
+        or getattr(bound, "model", None)
+        or "unknown"
     )
+
+
+def _record_call(
+    provider,
+    mode: str,
+    outcome: str,
+    started: float,
+    request_id: str,
+    call_index: int,
+    *,
+    ttft: float | None = None,
+    generation_seconds: float | None = None,
+    response=None,
+) -> dict:
+    elapsed = perf_counter() - started
+    provider_name = _provider_name(provider)
+    usage = _token_usage(response) if response is not None else (None, None, None)
+    input_tokens, output_tokens, total_tokens = usage
+    tokens_per_second = (
+        output_tokens / generation_seconds
+        if output_tokens is not None and generation_seconds and generation_seconds > 0
+        else None
+    )
+
+    LLM_CALLS.labels(provider_name, mode, outcome).inc()
+    LLM_CALL_DURATION.labels(provider_name, mode).observe(elapsed)
+    if ttft is not None:
+        LLM_TTFT.labels(provider_name).observe(ttft)
+    if generation_seconds is not None:
+        LLM_GENERATION_DURATION.labels(provider_name).observe(generation_seconds)
+    if isinstance(output_tokens, (int, float)):
+        LLM_OUTPUT_TOKENS.labels(provider_name).observe(output_tokens)
+    if tokens_per_second is not None:
+        LLM_TOKENS_PER_SECOND.labels(provider_name).observe(tokens_per_second)
+
+    measurement = {
+        "provider": provider_name,
+        "model": _model_name(provider),
+        "mode": mode,
+        "outcome": outcome,
+        "call_index": call_index,
+        "duration_seconds": elapsed,
+        "ttft_seconds": ttft,
+        "generation_seconds": generation_seconds,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "tokens_per_second": tokens_per_second,
+    }
+    logger.info(
+        "LLM call conversation_id=%s provider=%s model=%s mode=%s call=%d "
+        "status=%s total_ms=%.1f ttft_ms=%s generation_ms=%s input_tokens=%s "
+        "output_tokens=%s total_tokens=%s tps=%s",
+        request_id or "-",
+        measurement["provider"],
+        measurement["model"],
+        mode,
+        call_index,
+        outcome,
+        elapsed * 1000,
+        "-" if ttft is None else round(ttft * 1000, 1),
+        "-" if generation_seconds is None else round(generation_seconds * 1000, 1),
+        "-" if input_tokens is None else input_tokens,
+        "-" if output_tokens is None else output_tokens,
+        "-" if total_tokens is None else total_tokens,
+        "-" if tokens_per_second is None else round(tokens_per_second, 1),
+    )
+    return measurement
 
 
 def llm():
@@ -105,13 +184,18 @@ def content_text(content: object) -> str:
 
 def invoke_with_fallbacks(models, messages, request_id: str = ""):
     failures = []
-    for model in models:
+    for call_index, model in enumerate(models, 1):
+        started = perf_counter()
         try:
             response = model.invoke(messages)
-            _log_token_usage(model, response, request_id)
+            _record_call(
+                model, "invoke", "ok", started, request_id, call_index,
+                response=response,
+            )
             return response
         except Exception as exc:
-            provider = type(model).__name__
+            _record_call(model, "invoke", "error", started, request_id, call_index)
+            provider = _provider_name(model)
             LLM_FAILURES.labels(provider).inc()
             failures.append(f"{provider}: {type(exc).__name__}: {exc}")
             logger.warning(
@@ -126,21 +210,24 @@ def invoke_with_fallbacks(models, messages, request_id: str = ""):
     )
 
 
-def stream_with_fallbacks(models, messages, writer, request_id: str = ""):
+def stream_with_fallbacks(
+    models, messages, writer, request_id: str = "", metrics_callback=None
+):
     failures = []
-    for model in models:
+    for call_index, model in enumerate(models, 1):
         try:
-            response = _stream_model(model, messages, writer)
-            _log_token_usage(model, response, request_id)
+            response = _stream_model(
+                model, messages, writer, request_id, call_index, metrics_callback
+            )
             return response
         except Exception as exc:
             if getattr(exc, "output_started", False):
                 raise RuntimeError(
-                    f"Chat model {type(model).__name__} streaming failed after "
+                    f"Chat model {_provider_name(model)} streaming failed after "
                     "output began; refusing to retry to avoid duplicating a "
                     f"partial response: {type(exc).__name__}: {exc}"
                 ) from exc
-            provider = type(model).__name__
+            provider = _provider_name(model)
             LLM_FAILURES.labels(provider).inc()
             failures.append(f"{provider}: {type(exc).__name__}: {exc}")
             logger.warning(
@@ -156,20 +243,58 @@ def stream_with_fallbacks(models, messages, writer, request_id: str = ""):
     )
 
 
-def _stream_model(model, messages, writer) -> AIMessageChunk:
+def _stream_model(
+    model, messages, writer, request_id="", call_index=1, metrics_callback=None
+) -> AIMessageChunk:
+    started = perf_counter()
     response = None
     output_started = False
+    first_text_at = None
+    last_text_at = None
     try:
         for chunk in model.stream(messages):
             text = content_text(chunk.content)
             if text:
+                now = perf_counter()
+                if first_text_at is None:
+                    first_text_at = now
+                last_text_at = now
                 output_started = True
                 writer({"type": "token", "text": text})
             response = chunk if response is None else response + chunk
     except Exception as exc:
+        ttft = first_text_at - started if first_text_at is not None else None
+        generation = (
+            last_text_at - first_text_at
+            if first_text_at is not None and last_text_at is not None
+            else None
+        )
+        measurement = _record_call(
+            model, "stream", "error", started, request_id, call_index,
+            ttft=ttft, generation_seconds=generation,
+        )
+        if metrics_callback is not None:
+            metrics_callback(measurement)
         if output_started:
             exc.output_started = True
         raise
     if response is None:
+        measurement = _record_call(
+            model, "stream", "empty", started, request_id, call_index
+        )
+        if metrics_callback is not None:
+            metrics_callback(measurement)
         raise RuntimeError("The model returned no response chunks")
+    ttft = first_text_at - started if first_text_at is not None else None
+    generation = (
+        last_text_at - first_text_at
+        if first_text_at is not None and last_text_at is not None
+        else None
+    )
+    measurement = _record_call(
+        model, "stream", "ok", started, request_id, call_index,
+        ttft=ttft, generation_seconds=generation, response=response,
+    )
+    if metrics_callback is not None:
+        metrics_callback(measurement)
     return response

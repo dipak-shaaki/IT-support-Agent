@@ -3,11 +3,15 @@ import logging
 from typing import Literal
 from uuid import uuid4
 
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.config import get_stream_writer
 from langgraph.prebuilt import ToolNode
 
 from app.agent import model, prompts
+from app.agent.policy import (
+    is_answer_source_followup,
+    is_non_retrieval_turn,
+)
 from app.agent.state import AgentState
 from app.agent.tools import search_private_kb, search_web
 
@@ -21,6 +25,11 @@ REPETITIVE_FOLLOWUP_ANSWER = (
 
 
 def available_tools(state: AgentState) -> list:
+    if (
+        is_non_retrieval_turn(state["question"])
+        and not state["require_web_search"]
+    ):
+        return []
     tools = [search_private_kb]
     if state["require_web_search"] and state["private_kb_searched"]:
         tools.append(search_web)
@@ -35,14 +44,85 @@ def _mandatory_step(state: AgentState) -> str | None:
     return None
 
 
-def route_initial_state(state: AgentState) -> Literal["agent", "followup_guard"]:
-    return "followup_guard" if state["repetitive_followup"] else "agent"
+def route_initial_state(
+    state: AgentState,
+) -> Literal["agent", "followup_guard", "prefetch_private_kb"]:
+    if state["repetitive_followup"]:
+        return "followup_guard"
+    if (
+        not state["require_web_search"]
+        and not is_non_retrieval_turn(state["question"])
+    ):
+        return "prefetch_private_kb"
+    return "agent"
+
+
+def _retrieval_query(state: AgentState) -> str:
+    question = state["question"]
+    if not is_answer_source_followup(question):
+        return question
+
+    for message in reversed(state["messages"][:-1]):
+        if (
+            not isinstance(message, HumanMessage)
+            or not isinstance(message.content, str)
+        ):
+            continue
+        candidate = message.content.strip()
+        if (
+            candidate
+            and not is_non_retrieval_turn(candidate)
+            and not is_answer_source_followup(candidate)
+        ):
+            return candidate
+    return question
 
 
 def stop_repetitive_followup(_state: AgentState):
     return {
         "answer": REPETITIVE_FOLLOWUP_ANSWER,
         "source_used": "direct",
+    }
+
+
+def prefetch_private_kb(state: AgentState):
+    """Prefetch private KB to avoid an extra LLM tool-decision round-trip."""
+    query = _retrieval_query(state)
+    call_id = str(uuid4())
+    call = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": search_private_kb.name,
+                "args": {"query": query},
+                "id": call_id,
+                "type": "tool_call",
+            }
+        ],
+    )
+    result = search_private_kb.invoke({"query": query})
+    tool_message = ToolMessage(
+        content=result,
+        name=search_private_kb.name,
+        tool_call_id=call_id,
+    )
+
+    trace = [
+        *state["trace"],
+        f"Tool call → {search_private_kb.name}({query})",
+    ]
+    citations = list(state["citations"])
+    payload = _decode_tool_result(tool_message, search_private_kb.name)
+    if payload is not None:
+        _add_private_citations(payload, citations, trace)
+
+    return {
+        "messages": [call, tool_message],
+        "trace": trace,
+        "citations": citations,
+        "private_kb_searched": True,
+        "current_query": query,
+        "tool_call_count": state["tool_call_count"] + 1,
     }
 
 
@@ -55,8 +135,13 @@ def call_agent(state: AgentState):
     messages = [SystemMessage(content=prompts.SYSTEM_PROMPT), *state["messages"]]
     if state["stream_tokens"]:
         writer = get_stream_writer()
+        llm_metrics = list(state.get("llm_metrics", []))
         response = model.stream_with_fallbacks(
-            models, messages, writer, state["request_id"]
+            models,
+            messages,
+            writer,
+            state["request_id"],
+            metrics_callback=llm_metrics.append,
         )
     else:
         response = model.invoke_with_fallbacks(
@@ -68,7 +153,10 @@ def call_agent(state: AgentState):
             if call["name"] in {tool.name for tool in tools}:
                 query = call.get("args", {}).get("query", "")
                 trace = [*trace, f"Tool call → {call['name']}({query})"]
-    return {"messages": [response], "trace": trace}
+    update = {"messages": [response], "trace": trace}
+    if state["stream_tokens"]:
+        update["llm_metrics"] = llm_metrics
+    return update
 
 
 def route_after_agent(
@@ -77,6 +165,9 @@ def route_after_agent(
     last_message = state["messages"][-1]
     if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
         return _mandatory_step(state) or "finalize"
+    available_names = {tool.name for tool in available_tools(state)}
+    if any(call["name"] not in available_names for call in last_message.tool_calls):
+        return "finalize"
     if any(
         call["name"] == search_web.name
         for call in last_message.tool_calls
@@ -171,6 +262,11 @@ def _process_tool_results(calls, results_by_id, state):
             continue
         if call["name"] == search_private_kb.name:
             private_kb_searched = True
+            citations = [
+                citation
+                for citation in citations
+                if citation.get("type") != "private_kb"
+            ]
             _add_private_citations(payload, citations, trace)
         elif call["name"] == search_web.name:
             web_searched = True

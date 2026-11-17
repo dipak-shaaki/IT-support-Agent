@@ -9,6 +9,7 @@ from app.agent.state import AgentState
 def build_graph():
     graph = StateGraph(AgentState)
     graph.add_node("agent", nodes.call_agent)
+    graph.add_node("prefetch_private_kb", nodes.prefetch_private_kb)
     graph.add_node("mandatory_private_search", nodes.mandatory_private_search)
     graph.add_node("mandatory_web_search", nodes.mandatory_web_search)
     graph.add_node("tools", nodes.execute_tools)
@@ -20,6 +21,7 @@ def build_graph():
         {
             "agent": "agent",
             "followup_guard": "followup_guard",
+            "prefetch_private_kb": "prefetch_private_kb",
         },
     )
     graph.add_conditional_edges(
@@ -32,6 +34,7 @@ def build_graph():
             "finalize": "finalize",
         },
     )
+    graph.add_edge("prefetch_private_kb", "agent")
     graph.add_edge("mandatory_private_search", "tools")
     graph.add_edge("mandatory_web_search", "tools")
     graph.add_edge("tools", "agent")
@@ -66,6 +69,7 @@ def initial_state(
         "web_searched": False,
         "trace": [],
         "citations": [],
+        "llm_metrics": [],
     }
 
 

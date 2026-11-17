@@ -1,4 +1,8 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:conda",
-    "python-envs.defaultPackageManager": "ms-python.python:conda"
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "sonarlint.connectedMode.project": {
+        "connectionId": "dipak-shaaki",
+        "projectKey": "dipak-shaaki_IT-support-Agent"
+    }
 }

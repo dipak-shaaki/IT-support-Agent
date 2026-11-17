@@ -13,7 +13,7 @@ from typing import Any
 from langchain_core.messages import ToolMessage
 
 from app.core.config import get_settings
-from app.agent.graph import ask
+from app.agent.graph import agent_graph, initial_state
 
 CASES_PATH = Path(__file__).with_name("cases.jsonl")
 logger = logging.getLogger(__name__)
@@ -235,6 +235,8 @@ def run_evaluations(
 
 def _evaluate_repetitions(cases, repeats):
     results, latencies = [], []
+    total = len(cases) * repeats
+    completed = 0
     for repetition in range(1, repeats + 1):
         for case in cases:
             evaluated, elapsed = _evaluate_one(case)
@@ -242,17 +244,54 @@ def _evaluate_repetitions(cases, repeats):
             evaluated["latency_seconds"] = elapsed
             results.append(evaluated)
             latencies.append(elapsed)
+            completed += 1
+            status = "PASS" if evaluated.get("passed") else "FAIL"
+            question = case.get("question", "")
+            answer = evaluated.get("answer", "")
+            source = evaluated.get("source_used", "")
+            tools = ", ".join(evaluated.get("tools_called", [])) or "-"
+            checks = evaluated.get("checks", {})
+            failed_checks = [name for name, ok in checks.items() if not ok]
+            print(
+                f"\n[{completed}/{total}] {status} {case['name']} "
+                f"{elapsed:.2f}s rep={repetition} source={source} tools={tools}",
+                file=sys.stderr,
+                flush=True,
+            )
+            print(f"Q: {question}", file=sys.stderr, flush=True)
+            print(f"A: {answer}", file=sys.stderr, flush=True)
+            if failed_checks:
+                print(f"Failed checks: {', '.join(failed_checks)}", file=sys.stderr, flush=True)
+            if evaluated.get("error"):
+                print(f"Error: {evaluated['error']}", file=sys.stderr, flush=True)
     return results, latencies
 
 
 def _evaluate_one(case):
     started = time.perf_counter()
     try:
-        evaluated = evaluate_case(case, ask(case["question"]))
+        result = _ask_streaming(case["question"])
+        evaluated = evaluate_case(case, result)
+        evaluated["llm_calls"] = result.get("llm_metrics", [])
     except Exception as exc:
         logger.exception("Evaluation case %s failed", case["name"])
         evaluated = {"name": case["name"], "passed": False, "error": f"{type(exc).__name__}: {exc}"}
     return evaluated, time.perf_counter() - started
+
+
+def _ask_streaming(question: str) -> dict[str, Any]:
+    """Run the same streaming graph path as the chat stream endpoint."""
+    state = initial_state(question, stream_tokens=True)
+    for mode, chunk in agent_graph.stream(
+        state, stream_mode=["updates", "custom"]
+    ):
+        if mode != "updates":
+            continue
+        for update in chunk.values():
+            if "messages" in update:
+                state["messages"].extend(update["messages"])
+            state.update({key: value for key, value in update.items() if key != "messages"})
+    return state
 
 
 def _evaluation_summary(cases, results, latencies, repeats, started_at):
@@ -272,6 +311,12 @@ def _evaluation_summary(cases, results, latencies, repeats, started_at):
                 retrieval_cases.append((case, result))
 
     settings = get_settings()
+    llm_calls = [call for result in results for call in result.get("llm_calls", [])]
+    ttft_samples = [call["ttft_seconds"] for call in llm_calls if call.get("ttft_seconds") is not None]
+    call_duration_samples = [call["duration_seconds"] for call in llm_calls]
+    generation_samples = [call["generation_seconds"] for call in llm_calls if call.get("generation_seconds") is not None]
+    output_token_samples = [call["output_tokens"] for call in llm_calls if call.get("output_tokens") is not None]
+    tps_samples = [call["tokens_per_second"] for call in llm_calls if call.get("tokens_per_second") is not None]
     return {
         "passed": passed,
         "total": len(results),
@@ -284,6 +329,7 @@ def _evaluation_summary(cases, results, latencies, repeats, started_at):
             "model": settings.groq_model,
             "embedding_model": settings.embedding_model,
             "latency_percentile_method": "nearest_rank",
+            "evaluation_transport": "streaming",
         },
         "metrics": {
             "source_accuracy": _rate(
@@ -355,6 +401,20 @@ def _evaluation_summary(cases, results, latencies, repeats, started_at):
             "latency_mean_seconds": _rate(sum(latencies), len(latencies)),
             "latency_p95_seconds": _percentile(latencies, 0.95),
             "latency_p99_seconds": _percentile(latencies, 0.99),
+            "llm_call_samples": len(llm_calls),
+            "llm_call_duration_mean_seconds": _rate(sum(call_duration_samples), len(call_duration_samples)),
+            "llm_call_duration_p95_seconds": _percentile(call_duration_samples, 0.95),
+            "llm_ttft_samples": len(ttft_samples),
+            "llm_ttft_mean_seconds": _rate(sum(ttft_samples), len(ttft_samples)),
+            "llm_ttft_p95_seconds": _percentile(ttft_samples, 0.95),
+            "llm_generation_samples": len(generation_samples),
+            "llm_generation_mean_seconds": _rate(sum(generation_samples), len(generation_samples)),
+            "llm_generation_p95_seconds": _percentile(generation_samples, 0.95),
+            "llm_output_token_samples": len(output_token_samples),
+            "llm_output_tokens_mean": _rate(sum(output_token_samples), len(output_token_samples)),
+            "llm_generation_tps_samples": len(tps_samples),
+            "llm_generation_tps_mean": _rate(sum(tps_samples), len(tps_samples)),
+            "llm_generation_tps_p95": _percentile(tps_samples, 0.95),
         },
         "cases": results,
     }
