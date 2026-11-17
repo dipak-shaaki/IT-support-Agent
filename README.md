@@ -27,7 +27,6 @@ flowchart TD
     OUT --> SAVE[Save conversation and audit]
     SAVE --> RESP[Return JSON or SSE]
     RESP --> C
-    API -. request metrics .-> METRICS[Prometheus]
 ```
 
 For IT questions, private retrieval runs before generation. Current service
@@ -66,8 +65,7 @@ the worker.
 - **Conversation memory:** Redis stores a bounded recent message history with a
   configurable expiry.
 - **Audit and operations:** SQLite stores request audit data. The stats API
-  reports usage, sources, recent queries, and knowledge gaps; `/metrics`
-  exposes Prometheus metrics, including request, retrieval, and LLM timings.
+  reports usage, sources, recent queries, and knowledge gaps.
 - **Security:** Optional trusted-proxy identity and role checks, admin-key
   protection, request rate limiting, upload size and content validation,
   production configuration checks, and PII redaction before web search.
@@ -163,11 +161,10 @@ unless explicitly enabled.
 | `GET` | `/api/health` | Liveness check |
 | `GET` | `/api/ready` | Redis and local BM25 readiness |
 | `GET` | `/api/stats` | Admin audit and knowledge-gap data |
-| `GET` | `/metrics` | Prometheus metrics |
 
 Production deployments require a unique `ADMIN_API_KEY`, `AUTH_MODE=proxy`
 behind a trusted identity proxy, restricted CORS origins, and private access to
-Redis and `/metrics`. Conversation history expires after 24 hours by default.
+Redis. Conversation history expires after 24 hours by default.
 
 ## Evaluation and tests
 
